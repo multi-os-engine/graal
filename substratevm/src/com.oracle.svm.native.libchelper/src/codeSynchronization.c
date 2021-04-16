@@ -24,8 +24,20 @@
  * questions.
  */
 
+
+#if defined (__clang__) && defined (__APPLE__)
+#include <stddef.h>
+extern void sys_icache_invalidate (void *start, size_t len);
+#endif
+
 void codeSynchronization_clearCache(long unsigned codeStart, long unsigned codeSize){
+#if defined (__clang__) && defined (__APPLE__)
+  sys_icache_invalidate ((void *) codeStart, codeSize);
+#elif defined (__GNUC__)
     long unsigned  codeEnd = codeStart + codeSize;
     __builtin___clear_cache((char *) codeStart, (char *) codeEnd);
+#else
+#error "Missing builtin to flush instruction cache"
+#endif
 }
 
