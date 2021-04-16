@@ -180,8 +180,10 @@ void determineCPUFeatures(CPUFeatures* features) {
 
 #elif defined(__aarch64__)
 
+#ifndef __APPLE__
 #include <sys/auxv.h>
 #include <asm/hwcap.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -230,6 +232,7 @@ void determineCPUFeatures(CPUFeatures* features) {
  */
 void determineCPUFeatures(CPUFeatures* features) {
 
+#ifndef __APPLE__
   unsigned long auxv = getauxval(AT_HWCAP);
   features->fFP = !!(auxv & HWCAP_FP);
   features->fASIMD = !!(auxv & HWCAP_ASIMD);
@@ -243,6 +246,11 @@ void determineCPUFeatures(CPUFeatures* features) {
   features->fSTXRPREFETCH = !!(auxv & HWCAP_STXR_PREFETCH);
   features->fA53MAC = !!(auxv & HWCAP_A53MAC);
   features->fDMBATOMICS = 0;
+#else
+  // These features are always avaliable on Apple products
+  features->fFP = 1;
+  features->fASIMD = 1;
+#endif
 
   //checking for features signaled in another way
 
