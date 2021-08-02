@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -998,7 +998,7 @@ public abstract class InteropLibrary extends Library {
     }
 
     /**
-     * Associates the specified value with the specified key in the receiver. Writing a member is
+     * Associates the specified value with the specified key in the receiver. Writing the entry is
      * allowed if is existing and {@link #isHashEntryModifiable(Object, Object) modifiable}, or not
      * existing and {@link #isHashEntryInsertable(Object, Object) insertable}.
      *

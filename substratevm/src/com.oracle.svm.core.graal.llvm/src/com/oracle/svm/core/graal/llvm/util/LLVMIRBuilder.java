@@ -1183,8 +1183,10 @@ public class LLVMIRBuilder implements AutoCloseable {
         return LLVM.LLVMBuildAlloca(builder, type, DEFAULT_INSTR_NAME);
     }
 
-    public LLVMValueRef buildArrayAlloca(LLVMTypeRef type, int slots) {
-        return LLVM.LLVMBuildArrayAlloca(builder, type, constantInt(slots), DEFAULT_INSTR_NAME);
+    public LLVMValueRef buildArrayAlloca(LLVMTypeRef type, int slots, int alignmentInBytes) {
+        LLVMValueRef alloca = LLVM.LLVMBuildArrayAlloca(builder, type, constantInt(slots), DEFAULT_INSTR_NAME);
+        LLVM.LLVMSetAlignment(alloca, alignmentInBytes);
+        return alloca;
     }
 
     public void buildPrefetch(LLVMValueRef address) {
@@ -1245,5 +1247,10 @@ public class LLVMIRBuilder implements AutoCloseable {
         LLVMTypeRef valueType = LLVM.LLVMTypeOf(value);
         LLVMValueRef castedAddress = buildBitcast(address, pointerType(valueType, isObjectType(typeOf(address)), false));
         return LLVM.LLVMBuildAtomicRMW(builder, operation, castedAddress, value, LLVM.LLVMAtomicOrderingMonotonic, FALSE);
+    }
+
+    public void buildClearCache(LLVMValueRef start, LLVMValueRef end) {
+        LLVMTypeRef clearCacheType = functionType(voidType(), rawPointerType(), rawPointerType());
+        buildIntrinsicCall("llvm.clear_cache", clearCacheType, start, end);
     }
 }

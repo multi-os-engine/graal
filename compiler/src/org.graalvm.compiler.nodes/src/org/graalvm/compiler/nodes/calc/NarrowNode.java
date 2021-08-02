@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -35,7 +35,7 @@ import org.graalvm.compiler.core.common.type.IntegerStamp;
 import org.graalvm.compiler.core.common.type.PrimitiveStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.graph.NodeClass;
-import org.graalvm.compiler.graph.spi.CanonicalizerTool;
+import org.graalvm.compiler.nodes.spi.CanonicalizerTool;
 import org.graalvm.compiler.lir.gen.ArithmeticLIRGeneratorTool;
 import org.graalvm.compiler.nodeinfo.NodeInfo;
 import org.graalvm.compiler.nodes.NodeView;
@@ -164,13 +164,15 @@ public final class NarrowNode extends IntegerConvertNode<Narrow, IntegerConvertO
             }
         } else if (forValue instanceof AndNode) {
             AndNode andNode = (AndNode) forValue;
-            IntegerStamp yStamp = (IntegerStamp) andNode.getY().stamp(view);
-            IntegerStamp xStamp = (IntegerStamp) andNode.getX().stamp(view);
-            long relevantMask = CodeUtil.mask(this.getResultBits());
-            if ((relevantMask & yStamp.downMask()) == relevantMask) {
-                return create(andNode.getX(), this.getResultBits(), view);
-            } else if ((relevantMask & xStamp.downMask()) == relevantMask) {
-                return create(andNode.getY(), this.getResultBits(), view);
+            Stamp xStamp = andNode.getX().stamp(view);
+            Stamp yStamp = andNode.getY().stamp(view);
+            if (xStamp instanceof IntegerStamp && yStamp instanceof IntegerStamp) {
+                long relevantMask = CodeUtil.mask(this.getResultBits());
+                if ((relevantMask & ((IntegerStamp) yStamp).downMask()) == relevantMask) {
+                    return create(andNode.getX(), this.getResultBits(), view);
+                } else if ((relevantMask & ((IntegerStamp) xStamp).downMask()) == relevantMask) {
+                    return create(andNode.getY(), this.getResultBits(), view);
+                }
             }
         }
 

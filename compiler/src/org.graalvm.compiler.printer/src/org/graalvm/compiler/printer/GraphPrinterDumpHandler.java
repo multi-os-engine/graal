@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -126,7 +126,7 @@ public final class GraphPrinterDumpHandler implements DebugDumpHandler {
 
     @Override
     @SuppressWarnings("try")
-    public void dump(DebugContext debug, Object object, final String format, Object... arguments) {
+    public void dump(Object object, DebugContext debug, boolean forced, final String format, Object... arguments) {
         OptionValues options = debug.getOptions();
         if (object instanceof Graph && DebugOptions.PrintGraph.getValue(options) != PrintGraphTarget.Disable) {
             final Graph graph = (Graph) object;

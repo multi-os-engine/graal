@@ -99,7 +99,7 @@ final class EnumSwitchPlugin implements NodePlugin {
              */
             AnalysisMethod aMethod = (AnalysisMethod) method;
             EnumSwitchFeature feature = ImageSingletons.lookup(EnumSwitchFeature.class);
-            aMethod.ensureGraphParsed(feature.bb, false);
+            aMethod.ensureGraphParsed(feature.bb);
             Boolean methodSafeForExecution = feature.methodsSafeForExecution.get(aMethod);
             assert methodSafeForExecution != null : "after-parsing hook not executed for method " + aMethod.format("%H.%n(%p)");
             if (!methodSafeForExecution.booleanValue()) {
@@ -145,7 +145,7 @@ final class EnumSwitchFeature implements GraalFeature {
     }
 
     private void onMethodParsed(AnalysisMethod method, StructuredGraph graph) {
-        boolean methodSafeForExecution = graph != null && graph.getNodes().filter(node -> node instanceof EnsureClassInitializedNode).isEmpty();
+        boolean methodSafeForExecution = graph.getNodes().filter(node -> node instanceof EnsureClassInitializedNode).isEmpty();
 
         Boolean existingValue = methodsSafeForExecution.put(method, methodSafeForExecution);
         assert existingValue == null : "Method parsed twice: " + method.format("%H.%n(%p)");

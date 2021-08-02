@@ -179,9 +179,16 @@ public final class VM extends NativeEnv implements ContextAccess {
     }
 
     public void attachThread(Thread hostThread) {
+        if (hostThread != Thread.currentThread()) {
+            getLogger().warning("unimplemented: attachThread for non-current thread: " + hostThread);
+            return;
+        }
         assert hostThread == Thread.currentThread();
         try {
             getUncached().execute(mokapotAttachThread, mokapotEnvPtr);
+            // Initialize external threads e.g. ctype TLS data must be initialized for threads
+            // created outside the isolated namespace using the nfi-dlmopen backend.
+            getNativeAccess().prepareThread();
         } catch (UnsupportedTypeException | ArityException | UnsupportedMessageException e) {
             throw EspressoError.shouldNotReachHere("mokapotAttachThread failed", e);
         }
@@ -1217,7 +1224,11 @@ public final class VM extends NativeEnv implements ContextAccess {
         // differ in some cases) are overwritten.
         setProperty.invokeWithConversions(properties, "java.class.path", stringify(props.classpath()));
         setProperty.invokeWithConversions(properties, "java.home", props.javaHome().toString());
-        setProperty.invokeWithConversions(properties, "sun.boot.class.path", stringify(props.bootClasspath()));
+        if (getJavaVersion().java8OrEarlier()) {
+            setProperty.invokeWithConversions(properties, "sun.boot.class.path", stringify(props.bootClasspath()));
+        } else {
+            setProperty.invokeWithConversions(properties, "jdk.boot.class.path.append", stringify(props.bootClasspath()));
+        }
         setProperty.invokeWithConversions(properties, "java.library.path", stringify(props.javaLibraryPath()));
         setProperty.invokeWithConversions(properties, "sun.boot.library.path", stringify(props.bootLibraryPath()));
         setProperty.invokeWithConversions(properties, "java.ext.dirs", stringify(props.extDirs()));

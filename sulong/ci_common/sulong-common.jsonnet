@@ -54,6 +54,14 @@
     },
   },
 
+  labsjdk_ce_16: common["labsjdk-ce-16"] {
+    jdk:: "jdk16",
+    downloads+: {
+      # FIXME: do we really need to set EXTRA_JAVA_HOMES to an empty list?
+      EXTRA_JAVA_HOMES: { pathlist: [] },
+    },
+  },
+
   labsjdk_ee_11: common["labsjdk-ee-11"] {
     jdk:: "jdk11",
   },
@@ -149,6 +157,7 @@
       CLANG_CC: "clang-3.8",
       CLANG_CXX: "clang-3.8 --driver-mode=g++",
       CLANG_LLVM_OBJCOPY: "objcopy",
+      CLANG_LLVM_CONFIG: "llvm-config",
       CLANG_NO_OPTNONE: "1",
       CFLAGS: "-Wno-error",
     },
@@ -193,25 +202,6 @@
   },
 
   llvmBundled:: {},
-
-  llvm4_darwin_fix:: {
-    # FIXME: We prune `null` entries to produce the original result.
-    # Eventually, we should canonicalize this.
-    environment: std.prune(super.environment + {
-      CPPFLAGS: "-g",
-      CFLAGS: null,
-      CLANG_LLVM_OBJCOPY: null,
-    }),
-    timelimit: "0:45:00",
-  },
-
-  llvmBundled_darwin_fix: {
-    # nothing to do
-    environment+: {
-      LD_LIBRARY_PATH: "$BUILD_DIR/main/sulong/mxbuild/darwin-amd64/SULONG_LLVM_ORG/lib:$LD_LIBRARY_PATH",
-    },
-    timelimit: "0:45:00",
-  },
 
   requireGCC:: {
     packages+: {

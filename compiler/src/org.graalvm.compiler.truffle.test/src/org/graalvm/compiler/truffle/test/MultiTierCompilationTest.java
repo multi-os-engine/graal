@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -284,7 +284,7 @@ public class MultiTierCompilationTest extends PartialEvaluationTest {
         }
         rootTarget.call();
         Assert.assertEquals("break:second-tier", rootTarget.call());
-        Assert.assertEquals(9, rootNode.firstTierCallCount);
+        Assert.assertEquals(10, rootNode.firstTierCallCount);
     }
 
 }

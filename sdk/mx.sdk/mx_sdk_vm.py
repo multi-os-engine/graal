@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2019, 2020, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # The Universal Permissive License (UPL), Version 1.0
@@ -84,28 +84,33 @@ _graalvm_hostvm_configs = [
     ('jvm', [], ['--jvm'], 50),
     ('jvm-no-truffle-compilation', [], ['--jvm', '--experimental-options', '--engine.Compilation=false'], 29),
     ('native', [], ['--native'], 100),
-    ('native-no-truffle-compilation', [], ['--native', '--experimental-options', '--engine.Compilation=false'], 39)
+    ('native-no-truffle-compilation', [], ['--native', '--experimental-options', '--engine.Compilation=false'], 39),
+    ('jvm-3-compiler-threads', [], ['--jvm', '--engine.CompilerThreads=3'], 50),
+    ('native-3-compiler-threads', [], ['--native', '--engine.CompilerThreads=3'], 100)
 ]
 _known_vms = set()
 _base_jdk = None
 
 
 class AbstractNativeImageConfig(_with_metaclass(ABCMeta, object)):
-    def __init__(self, destination, jar_distributions, build_args, links=None, is_polyglot=False, dir_jars=False, home_finder=False):  # pylint: disable=super-init-not-called
+    def __init__(self, destination, jar_distributions, build_args, use_modules=None, links=None, is_polyglot=False, dir_jars=False, home_finder=False, build_time=1):  # pylint: disable=super-init-not-called
         """
         :type destination: str
         :type jar_distributions: list[str]
         :type build_args: list[str]
         :type links: list[str]
+        :param str use_modules: Run (with 'laucher') or run and build image with module support (with 'image').
         :param bool dir_jars: If true, all jars in the component directory are added to the classpath.
         """
         self.destination = mx_subst.path_substitutions.substitute(destination)
         self.jar_distributions = jar_distributions
         self.build_args = build_args
+        self.use_modules = use_modules
         self.links = [mx_subst.path_substitutions.substitute(link) for link in links] if links else []
         self.is_polyglot = is_polyglot
         self.dir_jars = dir_jars
         self.home_finder = home_finder
+        self.build_time = build_time
 
         assert isinstance(self.jar_distributions, list)
         assert isinstance(self.build_args, list)
@@ -130,19 +135,21 @@ class AbstractNativeImageConfig(_with_metaclass(ABCMeta, object)):
 class LauncherConfig(AbstractNativeImageConfig):
     def __init__(self, destination, jar_distributions, main_class, build_args, is_main_launcher=True,
                  default_symlinks=True, is_sdk_launcher=False, custom_launcher_script=None, extra_jvm_args=None,
-                 is_module_launcher=False, option_vars=None, home_finder=True, **kwargs):
+                 use_modules=None, main_module=None, option_vars=None, home_finder=True, **kwargs):
         """
         :param str main_class
         :param bool is_main_launcher
         :param bool default_symlinks
         :param bool is_sdk_launcher: Whether it uses org.graalvm.launcher.Launcher
-        :param bool is_module_launcher: Whether it uses classpath or module-path for the application
+        :param str use_modules: Run (with 'laucher') or run and build image with module support (with 'image').
+        :param str main_module: Specifies the main module. Mandatory if use_modules is not None
         :param str custom_launcher_script: Custom launcher script, to be used when not compiled as a native image
         """
-        super(LauncherConfig, self).__init__(destination, jar_distributions, build_args, home_finder=home_finder, **kwargs)
+        super(LauncherConfig, self).__init__(destination, jar_distributions, build_args, use_modules, home_finder=home_finder, **kwargs)
         self.main_class = main_class
         self.is_main_launcher = is_main_launcher
-        self.module_launcher = is_module_launcher
+        assert use_modules is None or main_module
+        self.main_module = main_module
         self.default_symlinks = default_symlinks
         self.is_sdk_launcher = is_sdk_launcher
         self.custom_launcher_script = custom_launcher_script
@@ -158,7 +165,7 @@ class LauncherConfig(AbstractNativeImageConfig):
         self.relative_home_paths[language] = path
 
     def get_add_exports(self, missing_jars):
-        if not self.module_launcher:
+        if self.use_modules is None:
             return ''
         distributions = self.jar_distributions
         distributions_transitive = mx.classpath_entries(distributions)
@@ -289,16 +296,17 @@ class GraalVmComponent(object):
                 raise mx.abort("{}: Cannot use `stability` attribute in combination with deprecated `supported` and `early_adopter` attributes".format(name))
             mx.warn("{}: `supported` and `early_adopter` attributes are deprecated, please use `stability`".format(name))
 
-        if supported:
-            if early_adopter:
-                stability = "earlyadopter"
+        if stability is None:
+            if supported:
+                if early_adopter:
+                    stability = "earlyadopter"
+                else:
+                    stability = "supported"
             else:
-                stability = "supported"
-        else:
-            if early_adopter:
-                stability = "experimental-earlyadopter"
-            else:
-                stability = "experimental"
+                if early_adopter:
+                    stability = "experimental-earlyadopter"
+                else:
+                    stability = "experimental"
         self.stability = stability
 
         self.jlink = jlink

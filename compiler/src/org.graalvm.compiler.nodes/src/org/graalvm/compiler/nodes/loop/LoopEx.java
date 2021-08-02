@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -72,6 +72,7 @@ import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.cfg.Block;
 import org.graalvm.compiler.nodes.cfg.ControlFlowGraph;
 import org.graalvm.compiler.nodes.debug.ControlFlowAnchored;
+import org.graalvm.compiler.nodes.debug.NeverStripMineNode;
 import org.graalvm.compiler.nodes.extended.ValueAnchorNode;
 import org.graalvm.compiler.nodes.loop.InductionVariable.Direction;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
@@ -382,7 +383,7 @@ public class LoopEx {
         return false;
     }
 
-    protected boolean isCfgLoopExit(AbstractBeginNode begin) {
+    public boolean isCfgLoopExit(AbstractBeginNode begin) {
         Block block = data.getCFG().blockFor(begin);
         return loop.getDepth() > block.getLoopDepth() || loop.isNaturalExit(block);
     }
@@ -556,6 +557,15 @@ public class LoopEx {
                 if (frameState.isExceptionHandlingBCI()) {
                     return false;
                 }
+            }
+        }
+        return true;
+    }
+
+    public boolean canStripMine() {
+        for (Node node : inside().nodes()) {
+            if (node instanceof NeverStripMineNode) {
+                return false;
             }
         }
         return true;

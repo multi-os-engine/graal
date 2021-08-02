@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -363,6 +363,10 @@ public class CheckGraalIntrinsics extends GraalTest {
                             "java/lang/CharacterDataLatin1.isLowerCase(I)Z",
                             "java/lang/CharacterDataLatin1.isUpperCase(I)Z",
                             "java/lang/CharacterDataLatin1.isWhitespace(I)Z",
+                            "java/lang/Math.copySign(DD)D",
+                            "java/lang/Math.copySign(FF)F",
+                            "java/lang/Math.signum(D)D",
+                            "java/lang/Math.signum(F)F",
                             "jdk/jfr/internal/JVM.getEventWriter()Ljava/lang/Object;");
             if (!config.useBase64Intrinsics()) {
                 add(ignore,
@@ -380,10 +384,6 @@ public class CheckGraalIntrinsics extends GraalTest {
                                 "java/lang/Math.min(DD)D",
                                 "java/lang/Math.min(FF)F");
             }
-            add(toBeInvestigated,
-                            "jdk/internal/misc/Unsafe.writeback0(J)V",
-                            "jdk/internal/misc/Unsafe.writebackPostSync0()V",
-                            "jdk/internal/misc/Unsafe.writebackPreSync0()V");
         }
 
         if (isJDK14OrHigher()) {
@@ -408,11 +408,6 @@ public class CheckGraalIntrinsics extends GraalTest {
                             // JDK-8254231: Implementation of Foreign Linker API (Incubator)
                             "java/lang/invoke/MethodHandle.linkToNative*",
 
-                            // JDK-8256999: Add C2 intrinsic for Reference.refersTo and
-                            // PhantomReference::refersTo
-                            "java/lang/ref/PhantomReference.refersTo0(Ljava/lang/Object;)Z",
-                            "java/lang/ref/Reference.refersTo0(Ljava/lang/Object;)Z",
-
                             // JDK-8248188: Add IntrinsicCandidate and API for Base64 decoding
                             "java/util/Base64$Decoder.decodeBlock([BII[BIZ)I",
 
@@ -420,7 +415,7 @@ public class CheckGraalIntrinsics extends GraalTest {
                             "jdk/internal/util/Preconditions.checkIndex(JJLjava/util/function/BiFunction;)J",
 
                             // JDK-8223347: Integration of Vector API (Incubator)
-                            // Checkstyle: stop
+                            // @formatter:off
                             "jdk/internal/vm/vector/VectorSupport.binaryOp(ILjava/lang/Class;Ljava/lang/Class;ILjava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;",
                             "jdk/internal/vm/vector/VectorSupport.blend(Ljava/lang/Class;Ljava/lang/Class;Ljava/lang/Class;ILjdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$Vector;Ljdk/internal/vm/vector/VectorSupport$VectorMask;Ljdk/internal/vm/vector/VectorSupport$VectorBlendOp;)Ljdk/internal/vm/vector/VectorSupport$Vector;",
                             "jdk/internal/vm/vector/VectorSupport.broadcastCoerced(Ljava/lang/Class;Ljava/lang/Class;IJLjdk/internal/vm/vector/VectorSupport$VectorSpecies;Ljdk/internal/vm/vector/VectorSupport$BroadcastOperation;)Ljava/lang/Object;",
@@ -441,7 +436,7 @@ public class CheckGraalIntrinsics extends GraalTest {
                             "jdk/internal/vm/vector/VectorSupport.ternaryOp(ILjava/lang/Class;Ljava/lang/Class;ILjava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljdk/internal/vm/vector/VectorSupport$TernaryOperation;)Ljava/lang/Object;",
                             "jdk/internal/vm/vector/VectorSupport.test(ILjava/lang/Class;Ljava/lang/Class;ILjava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Z",
                             "jdk/internal/vm/vector/VectorSupport.unaryOp(ILjava/lang/Class;Ljava/lang/Class;ILjava/lang/Object;Ljava/util/function/Function;)Ljava/lang/Object;",
-                            // Checkstyle: resume
+                            // @formatter:on
 
                             // JDK-8253525: Implement getInstanceSize/sizeOf intrinsics
                             "sun/instrument/InstrumentationImpl.getObjectSize0(JLjava/lang/Object;)J",

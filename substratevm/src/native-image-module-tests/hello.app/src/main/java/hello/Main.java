@@ -26,8 +26,31 @@ package hello;
 
 import hello.lib.Greeter;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 public class Main {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws NoSuchMethodException, InvocationTargetException, IllegalAccessException {
+        Module helloAppModule = Main.class.getModule();
+        assert helloAppModule.getName().equals("moduletests.hello.app");
+        assert helloAppModule.isExported("hello");
+
+        Module helloLibModule = Greeter.class.getModule();
+        assert helloLibModule.getName().equals("moduletests.hello.lib");
+        assert helloLibModule.isExported("hello.lib");
+
+        assert helloAppModule.canRead(helloLibModule);
+        // assert !helloLibModule.canRead(helloAppModule); GR-30957
+
+        System.out.println("Basic Module test involving " + helloAppModule + " and " + helloLibModule);
         Greeter.greet();
+
+        System.out.println("Now accessing package that is not exported in " + helloLibModule);
+        hello.privateLib.Greeter.greet();
+
+        System.out.println("Now accessing private method from not exported package in " + helloLibModule);
+        Method greetMethod = hello.privateLib2.PrivateGreeter.class.getDeclaredMethod("greet");
+        greetMethod.setAccessible(true);
+        greetMethod.invoke(null);
     }
 }

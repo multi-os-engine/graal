@@ -23,6 +23,7 @@
 package com.oracle.truffle.espresso.meta;
 
 import static com.oracle.truffle.espresso.EspressoOptions.SpecCompliancyMode.HOTSPOT;
+import static com.oracle.truffle.espresso.descriptors.Symbol.Name.platformClassLoader;
 
 import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
@@ -57,7 +58,10 @@ public final class Meta implements ContextAccess {
     private final EspressoContext context;
     private final ExceptionDispatch dispatch;
     private final StringConversion stringConversion;
+    private final InteropKlassesDispatch interopDispatch;
+    private StaticObject cachedPlatformClassLoader;
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public Meta(EspressoContext context) {
         CompilerAsserts.neverPartOfCompilation();
         this.context = context;
@@ -279,6 +283,9 @@ public final class Meta implements ContextAccess {
         java_io_InputStream_close = java_io_InputStream.requireDeclaredMethod(Name.close, Signature._void);
         java_io_PrintStream = knownKlass(Type.java_io_PrintStream);
         java_io_PrintStream_println = java_io_PrintStream.requireDeclaredMethod(Name.println, Signature._void_String);
+        java_nio_file_Path = knownKlass(Type.java_nio_file_Path);
+        java_nio_file_Paths = knownKlass(Type.java_nio_file_Paths);
+        java_nio_file_Paths_get = java_nio_file_Paths.requireDeclaredMethod(Name.get, Signature.Path_String_String_array);
 
         sun_launcher_LauncherHelper = knownKlass(Type.sun_launcher_LauncherHelper);
         sun_launcher_LauncherHelper_printHelpMessage = sun_launcher_LauncherHelper.requireDeclaredMethod(Name.printHelpMessage, Signature._void_boolean);
@@ -466,6 +473,8 @@ public final class Meta implements ContextAccess {
 
         if (getJavaVersion().java9OrLater()) {
             java_lang_System_initializeSystemClass = null;
+            jdk_internal_loader_ClassLoaders = knownKlass(Type.jdk_internal_loader_ClassLoaders);
+            jdk_internal_loader_ClassLoaders_platformClassLoader = jdk_internal_loader_ClassLoaders.requireDeclaredMethod(platformClassLoader, Signature.ClassLoader);
             jdk_internal_loader_ClassLoaders$PlatformClassLoader = knownKlass(Type.jdk_internal_loader_ClassLoaders$PlatformClassLoader);
             java_lang_StackWalker = knownKlass(Type.java_lang_StackWalker);
             java_lang_AbstractStackWalker = knownKlass(Type.java_lang_AbstractStackWalker);
@@ -482,6 +491,8 @@ public final class Meta implements ContextAccess {
             java_lang_System_initPhase3 = java_lang_System.requireDeclaredMethod(Name.initPhase3, Signature._void);
         } else {
             java_lang_System_initializeSystemClass = java_lang_System.requireDeclaredMethod(Name.initializeSystemClass, Signature._void);
+            jdk_internal_loader_ClassLoaders = null;
+            jdk_internal_loader_ClassLoaders_platformClassLoader = null;
             jdk_internal_loader_ClassLoaders$PlatformClassLoader = null;
             java_lang_StackWalker = null;
             java_lang_AbstractStackWalker = null;
@@ -610,12 +621,97 @@ public final class Meta implements ContextAccess {
         java_time_ZoneId_getId = java_time_ZoneId.requireDeclaredMethod(Name.getId, Signature.String);
         java_time_ZoneId_of = java_time_ZoneId.requireDeclaredMethod(Name.of, Signature.ZoneId_String);
         assert java_time_ZoneId_of.isStatic();
+
+        java_util_Map = knownKlass(Type.java_util_Map);
+        java_util_Map_get = java_util_Map.requireDeclaredMethod(Name.get, Signature.Object_Object);
+        java_util_Map_put = java_util_Map.requireDeclaredMethod(Name.put, Signature.Object_Object_Object);
+        java_util_Map_size = java_util_Map.requireDeclaredMethod(Name.size, Signature._int);
+        java_util_Map_remove = java_util_Map.requireDeclaredMethod(Name.remove, Signature.Object_Object);
+        java_util_Map_containsKey = java_util_Map.requireDeclaredMethod(Name.containsKey, Signature._boolean_Object);
+        java_util_Map_entrySet = java_util_Map.requireDeclaredMethod(Name.entrySet, Signature.java_util_Set);
+        assert java_util_Map.isInterface();
+
+        java_util_Map_Entry = knownKlass(Type.java_util_Map_Entry);
+        java_util_Map_Entry_getKey = java_util_Map_Entry.requireDeclaredMethod(Name.getKey, Signature.Object);
+        java_util_Map_Entry_getValue = java_util_Map_Entry.requireDeclaredMethod(Name.getValue, Signature.Object);
+        java_util_Map_Entry_setValue = java_util_Map_Entry.requireDeclaredMethod(Name.setValue, Signature.Object_Object);
+
+        java_util_List = knownKlass(Type.java_util_List);
+        java_util_List_get = java_util_List.requireDeclaredMethod(Name.get, Signature.Object_int);
+        java_util_List_set = java_util_List.requireDeclaredMethod(Name.set, Signature.Object_int_Object);
+        java_util_List_size = java_util_List.requireDeclaredMethod(Name.size, Signature._int);
+        assert java_util_List.isInterface();
+
+        java_util_Set = knownKlass(Type.java_util_Set);
+        java_util_Set_add = java_util_Set.requireDeclaredMethod(Name.add, Signature._boolean_Object);
+        assert java_util_Set.isInterface();
+
+        java_lang_Iterable = knownKlass(Type.java_lang_Iterable);
+        java_lang_Iterable_iterator = java_lang_Iterable.requireDeclaredMethod(Name.iterator, Signature.java_util_Iterator);
+        assert java_lang_Iterable.isInterface();
+
+        java_util_Iterator = knownKlass(Type.java_util_Iterator);
+        java_util_Iterator_next = java_util_Iterator.requireDeclaredMethod(Name.next, Signature.Object);
+        java_util_Iterator_hasNext = java_util_Iterator.requireDeclaredMethod(Name.hasNext, Signature._boolean);
+        java_util_Iterator_remove = java_util_Iterator.requireDeclaredMethod(Name.remove, Signature._void);
+        assert java_util_Iterator.isInterface();
+
+        java_util_NoSuchElementException = knownKlass(Type.java_util_NoSuchElementException);
+
+        interopDispatch = new InteropKlassesDispatch(this);
+
+        // used for class redefinition
+        java_lang_reflect_Proxy = knownKlass(Type.java_lang_reflect_Proxy);
+
+        // sun.misc.Proxygenerator -> java.lang.reflect.Proxygenerator in JDK 9
+        if (getJavaVersion().java8OrEarlier()) {
+            sun_misc_ProxyGenerator = knownKlass(Type.sun_misc_ProxyGenerator);
+            sun_misc_ProxyGenerator_generateProxyClass = sun_misc_ProxyGenerator.lookupDeclaredMethod(Name.generateProxyClass, Signature._byte_array_String_Class_array_int);
+
+            java_lang_reflect_ProxyGenerator = null;
+            java_lang_reflect_ProxyGenerator_generateProxyClass = null;
+        } else {
+            sun_misc_ProxyGenerator = null;
+            sun_misc_ProxyGenerator_generateProxyClass = null;
+
+            java_lang_reflect_ProxyGenerator = knownKlass(Type.java_lang_reflect_ProxyGenerator);
+            java_lang_reflect_ProxyGenerator_generateProxyClass = java_lang_reflect_ProxyGenerator.requireDeclaredMethod(Name.generateProxyClass, Signature._byte_array_String_Class_array_int);
+        }
+
+        if (getJavaVersion().java9OrLater()) {
+            jdk_internal_module_ModuleLoaderMap = knownKlass(Type.jdk_internal_module_ModuleLoaderMap);
+            jdk_internal_module_ModuleLoaderMap_bootModules = jdk_internal_module_ModuleLoaderMap.requireDeclaredMethod(Name.bootModules, Signature.java_util_Set);
+            jdk_internal_module_SystemModuleFinders = knownKlass(Type.jdk_internal_module_SystemModuleFinders);
+            jdk_internal_module_SystemModuleFinders_of = jdk_internal_module_SystemModuleFinders.requireDeclaredMethod(Name.of, Signature.ModuleFinder_SystemModules);
+            jdk_internal_module_SystemModuleFinders_ofSystem = jdk_internal_module_SystemModuleFinders.requireDeclaredMethod(Name.ofSystem, Signature.ModuleFinder);
+            jdk_internal_module_ModulePath = knownKlass(Type.jdk_internal_module_ModulePath);
+            jdk_internal_module_ModulePath_of = jdk_internal_module_ModulePath.requireDeclaredMethod(Name.of, Signature.ModuleFinder_Path_array);
+            java_lang_module_ModuleFinder = knownKlass(Type.java_lang_module_ModuleFinder);
+            java_lang_module_ModuleFinder_compose = java_lang_module_ModuleFinder.requireDeclaredMethod(Name.compose, Signature.ModuleFinder_ModuleFinder_array);
+        } else {
+            jdk_internal_module_ModuleLoaderMap = null;
+            jdk_internal_module_ModuleLoaderMap_bootModules = null;
+            jdk_internal_module_SystemModuleFinders = null;
+            jdk_internal_module_SystemModuleFinders_of = null;
+            jdk_internal_module_SystemModuleFinders_ofSystem = null;
+            jdk_internal_module_ModulePath = null;
+            jdk_internal_module_ModulePath_of = null;
+            java_lang_module_ModuleFinder = null;
+            java_lang_module_ModuleFinder_compose = null;
+        }
     }
 
     /**
+     * This method registers known classes that are NOT in {@code java.base} module after VM
+     * 
+     * initialization (/ex: {@code java.management}, {@code java.desktop}, etc...), or classes whose
+     * 
+     * hierarchy loads classes to early in the boot process..
+     * 
+     * <p>
      * Espresso's Polyglot API (polyglot.jar) is injected on the boot CP, must be loaded after
      * modules initialization.
-     * 
+     *
      * The classes in module java.management become known after modules initialization.
      */
     public void postSystemInit() {
@@ -641,6 +737,14 @@ public final class Meta implements ContextAccess {
             // GarbageCollectorMXBean createGarbageCollector(String var0, String var1)
             sun_management_ManagementFactory_createGarbageCollector = null;
         }
+
+        // java.beans package only available if java.desktop module is present on JDK9+
+        java_beans_ThreadGroupContext = loadKlassWithBootClassLoader(Type.java_beans_ThreadGroupContext);
+        java_beans_Introspector = loadKlassWithBootClassLoader(Type.java_beans_Introspector);
+
+        java_beans_ThreadGroupContext_init = java_beans_ThreadGroupContext != null ? java_beans_ThreadGroupContext.requireDeclaredMethod(Name._init_, Signature._void) : null;
+        java_beans_ThreadGroupContext_removeBeanInfo = java_beans_ThreadGroupContext != null ? java_beans_ThreadGroupContext.requireDeclaredMethod(Name.removeBeanInfo, Signature._void_Class) : null;
+        java_beans_Introspector_flushFromCaches = java_beans_Introspector != null ? java_beans_Introspector.requireDeclaredMethod(Name.flushFromCaches, Signature._void_Class) : null;
 
         // Load Espresso's Polyglot API.
         boolean polyglotSupport = getContext().getEnv().getOptions().get(EspressoOptions.Polyglot);
@@ -759,6 +863,13 @@ public final class Meta implements ContextAccess {
     public final Field java_lang_Double_value;
     public final Field java_lang_Long_value;
 
+    // used by class redefinition
+    public final ObjectKlass java_lang_reflect_Proxy;
+    public final ObjectKlass sun_misc_ProxyGenerator;
+    public final Method sun_misc_ProxyGenerator_generateProxyClass;
+    public final ObjectKlass java_lang_reflect_ProxyGenerator;
+    public final Method java_lang_reflect_ProxyGenerator_generateProxyClass;
+
     // Guest String.
     public final Field java_lang_String_value;
     public final Field java_lang_String_hash;
@@ -787,6 +898,8 @@ public final class Meta implements ContextAccess {
     public final Method sun_launcher_LauncherHelper_printHelpMessage;
     public final Field sun_launcher_LauncherHelper_ostream;
 
+    public final ObjectKlass jdk_internal_loader_ClassLoaders;
+    public final Method jdk_internal_loader_ClassLoaders_platformClassLoader;
     public final ObjectKlass jdk_internal_loader_ClassLoaders$PlatformClassLoader;
 
     public final ObjectKlass java_lang_Module;
@@ -909,6 +1022,10 @@ public final class Meta implements ContextAccess {
 
     public final ObjectKlass java_io_PrintStream;
     public final Method java_io_PrintStream_println;
+
+    public final ObjectKlass java_nio_file_Path;
+    public final ObjectKlass java_nio_file_Paths;
+    public final Method java_nio_file_Paths_get;
 
     // Array support.
     public final ObjectKlass java_lang_Cloneable;
@@ -1071,6 +1188,17 @@ public final class Meta implements ContextAccess {
     public final Field java_lang_StackFrameInfo_memberName;
     public final Field java_lang_StackFrameInfo_bci;
 
+    // Module system
+    public final ObjectKlass jdk_internal_module_ModuleLoaderMap;
+    public final Method jdk_internal_module_ModuleLoaderMap_bootModules;
+    public final ObjectKlass jdk_internal_module_SystemModuleFinders;
+    public final Method jdk_internal_module_SystemModuleFinders_of;
+    public final Method jdk_internal_module_SystemModuleFinders_ofSystem;
+    public final ObjectKlass jdk_internal_module_ModulePath;
+    public final Method jdk_internal_module_ModulePath_of;
+    public final ObjectKlass java_lang_module_ModuleFinder;
+    public final Method java_lang_module_ModuleFinder_compose;
+
     // Interop conversions.
     public final ObjectKlass java_time_Duration;
     public final Field java_time_Duration_seconds;
@@ -1107,12 +1235,49 @@ public final class Meta implements ContextAccess {
     public final Method java_time_ZoneId_getId;
     public final Method java_time_ZoneId_of;
 
+    public final ObjectKlass java_util_Map;
+    public final Method java_util_Map_size;
+    public final Method java_util_Map_get;
+    public final Method java_util_Map_put;
+    public final Method java_util_Map_remove;
+    public final Method java_util_Map_containsKey;
+    public final Method java_util_Map_entrySet;
+
+    public final ObjectKlass java_util_Map_Entry;
+    public final Method java_util_Map_Entry_getKey;
+    public final Method java_util_Map_Entry_getValue;
+    public final Method java_util_Map_Entry_setValue;
+
+    public final ObjectKlass java_util_List;
+    public final Method java_util_List_get;
+    public final Method java_util_List_set;
+    public final Method java_util_List_size;
+
+    public final ObjectKlass java_util_Set;
+    public final Method java_util_Set_add;
+
+    public final ObjectKlass java_lang_Iterable;
+    public final Method java_lang_Iterable_iterator;
+
+    public final ObjectKlass java_util_Iterator;
+    public final Method java_util_Iterator_next;
+    public final Method java_util_Iterator_hasNext;
+    public final Method java_util_Iterator_remove;
+
+    public final ObjectKlass java_util_NoSuchElementException;
+
     @CompilationFinal public ObjectKlass java_lang_management_MemoryUsage;
     @CompilationFinal public ObjectKlass sun_management_ManagementFactory;
     @CompilationFinal public Method sun_management_ManagementFactory_createMemoryPool;
     @CompilationFinal public Method sun_management_ManagementFactory_createMemoryManager;
     @CompilationFinal public Method sun_management_ManagementFactory_createGarbageCollector;
     @CompilationFinal public ObjectKlass java_lang_management_ThreadInfo;
+    // Used by class redefinition
+    @CompilationFinal public ObjectKlass java_beans_ThreadGroupContext;
+    @CompilationFinal public Method java_beans_ThreadGroupContext_init;
+    @CompilationFinal public Method java_beans_ThreadGroupContext_removeBeanInfo;
+    @CompilationFinal public ObjectKlass java_beans_Introspector;
+    @CompilationFinal public Method java_beans_Introspector_flushFromCaches;
 
     public final class PolyglotSupport {
         public final ObjectKlass UnknownIdentifierException;
@@ -1145,31 +1310,39 @@ public final class Meta implements ContextAccess {
         private PolyglotSupport() {
             boolean polyglotSupport = getContext().getEnv().getOptions().get(EspressoOptions.Polyglot);
             EspressoError.guarantee(polyglotSupport, "--java.Polyglot must be enabled");
-            EspressoError.guarantee(loadKlassWithBootClassLoader(Type.com_oracle_truffle_espresso_polyglot_Polyglot) != null,
-                            "polyglot.jar (Polyglot API) is not accessible");
-            ArityException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_ArityException);
+            // polyglot.jar is either on boot class path (JDK 8)
+            // or defined by a platform module (JDK 11+)
+            if (getJavaVersion().java8OrEarlier()) {
+                EspressoError.guarantee(loadKlassWithBootClassLoader(Type.com_oracle_truffle_espresso_polyglot_Polyglot) != null,
+                                "polyglot.jar (Polyglot API) is not accessible");
+            } else {
+                EspressoError.guarantee(loadKlassOrNull(Type.com_oracle_truffle_espresso_polyglot_Polyglot, getPlatformClassLoader()) != null,
+                                "polyglot.jar (Polyglot API) is not accessible");
+            }
+
+            ArityException = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_ArityException);
             ArityException_create_int_int = ArityException.requireDeclaredMethod(Name.create, Signature.ArityException_int_int);
             ArityException_create_int_int_Throwable = ArityException.requireDeclaredMethod(Name.create, Signature.ArityException_int_int_Throwable);
 
-            UnknownIdentifierException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_UnknownIdentifierException);
+            UnknownIdentifierException = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_UnknownIdentifierException);
             UnknownIdentifierException_create_String = UnknownIdentifierException.requireDeclaredMethod(Name.create, Signature.UnknownIdentifierException_String);
             UnknownIdentifierException_create_String_Throwable = UnknownIdentifierException.requireDeclaredMethod(Name.create, Signature.UnknownIdentifierException_String_Throwable);
 
-            UnsupportedMessageException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_UnsupportedMessageException);
+            UnsupportedMessageException = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_UnsupportedMessageException);
             UnsupportedMessageException_create = UnsupportedMessageException.requireDeclaredMethod(Name.create, Signature.UnsupportedMessageException);
             UnsupportedMessageException_create_Throwable = UnsupportedMessageException.requireDeclaredMethod(Name.create, Signature.UnsupportedMessageException_Throwable);
 
-            UnsupportedTypeException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_UnsupportedTypeException);
+            UnsupportedTypeException = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_UnsupportedTypeException);
             UnsupportedTypeException_create_Object_array_String = UnsupportedTypeException.requireDeclaredMethod(Name.create, Signature.UnsupportedTypeException_Object_array_String);
             UnsupportedTypeException_create_Object_array_String_Throwable = UnsupportedTypeException.requireDeclaredMethod(Name.create,
                             Signature.UnsupportedTypeException_Object_array_String_Throwable);
 
-            InvalidArrayIndexException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException);
+            InvalidArrayIndexException = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_InvalidArrayIndexException);
             InvalidArrayIndexException_create_long = InvalidArrayIndexException.requireDeclaredMethod(Name.create, Signature.InvalidArrayIndexException_long);
             InvalidArrayIndexException_create_long_Throwable = InvalidArrayIndexException.requireDeclaredMethod(Name.create, Signature.InvalidArrayIndexException_long_Throwable);
 
-            ForeignException = knownKlass(Type.com_oracle_truffle_espresso_polyglot_ForeignException);
-            ExceptionType = knownKlass(Type.com_oracle_truffle_espresso_polyglot_ExceptionType);
+            ForeignException = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_ForeignException);
+            ExceptionType = knownPlatformKlass(Type.com_oracle_truffle_espresso_polyglot_ExceptionType);
 
             ExceptionType_EXIT = ExceptionType.requireDeclaredField(Name.EXIT,
                             Type.com_oracle_truffle_espresso_polyglot_ExceptionType);
@@ -1367,14 +1540,28 @@ public final class Meta implements ContextAccess {
     // endregion Guest exception handling (throw)
 
     private ObjectKlass knownKlass(Symbol<Type> type) {
+        return knownKlass(type, StaticObject.NULL);
+    }
+
+    private ObjectKlass knownPlatformKlass(Symbol<Type> type) {
+        // known platform classes are loaded by the platform loader on JDK 11 and
+        // by the boot classloader on JDK 8
+        return knownKlass(type, getJavaVersion().java8OrEarlier() ? StaticObject.NULL : getPlatformClassLoader());
+    }
+
+    private ObjectKlass knownKlass(Symbol<Type> type, StaticObject classLoader) {
         CompilerAsserts.neverPartOfCompilation();
         assert !Types.isArray(type);
         assert !Types.isPrimitive(type);
-        ObjectKlass k = loadKlassWithBootClassLoader(type);
+        ObjectKlass k = loadKlassOrNull(type, classLoader);
         if (k == null) {
             throw EspressoError.shouldNotReachHere("Failed loading known class: ", type, ", discovered java version: ", getJavaVersion());
         }
         return k;
+    }
+
+    public Class<?> resolveDispatch(Klass k) {
+        return interopDispatch.resolveDispatch(k);
     }
 
     /**
@@ -1411,8 +1598,20 @@ public final class Meta implements ContextAccess {
     }
 
     @TruffleBoundary
+    private ObjectKlass loadKlassOrNull(Symbol<Type> type, @Host(ClassLoader.class) StaticObject classLoader) {
+        return (ObjectKlass) loadKlassOrNull(type, classLoader, StaticObject.NULL);
+    }
+
+    @TruffleBoundary
     private ObjectKlass loadKlassWithBootClassLoader(Symbol<Type> type) {
-        return (ObjectKlass) getRegistries().loadKlass(type, StaticObject.NULL, StaticObject.NULL);
+        return loadKlassOrNull(type, StaticObject.NULL);
+    }
+
+    private StaticObject getPlatformClassLoader() {
+        if (cachedPlatformClassLoader == null) {
+            cachedPlatformClassLoader = (StaticObject) jdk_internal_loader_ClassLoaders_platformClassLoader.invokeDirect(StaticObject.NULL);
+        }
+        return cachedPlatformClassLoader;
     }
 
     public Klass resolvePrimitive(Symbol<Type> type) {

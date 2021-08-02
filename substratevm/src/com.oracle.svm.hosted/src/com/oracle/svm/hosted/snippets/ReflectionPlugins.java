@@ -60,8 +60,10 @@ import org.graalvm.nativeimage.ImageSingletons;
 import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.meta.AnalysisUniverse;
 import com.oracle.svm.core.ParsingReason;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.TypeResult;
 import com.oracle.svm.core.annotate.Delete;
+import com.oracle.svm.core.hub.ClassForNameSupport;
 import com.oracle.svm.core.option.HostedOptionKey;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.ExceptionSynthesizer;
@@ -215,6 +217,7 @@ public final class ReflectionPlugins {
     private void registerClassPlugins(InvocationPlugins plugins) {
         registerFoldInvocationPlugins(plugins, Class.class,
                         "getClassLoader",
+                        "isInterface", "isPrimitive",
                         "getField", "getMethod", "getConstructor",
                         "getDeclaredField", "getDeclaredMethod", "getDeclaredConstructor");
 
@@ -284,6 +287,9 @@ public final class ReflectionPlugins {
             return throwException(b, targetMethod, targetParameters, e.getClass(), e.getMessage());
         }
         Class<?> clazz = typeResult.get();
+        if (!ClassForNameSupport.canBeFolded(clazz)) {
+            return false;
+        }
 
         JavaConstant classConstant = pushConstant(b, targetMethod, targetParameters, JavaKind.Object, clazz);
         if (classConstant == null) {
@@ -291,7 +297,7 @@ public final class ReflectionPlugins {
         }
 
         if (initialize) {
-            classInitializationPlugin.apply(b, b.getMetaAccess().lookupJavaType(clazz), null, null);
+            classInitializationPlugin.apply(b, b.getMetaAccess().lookupJavaType(clazz), () -> null, null);
         }
         return true;
     }
@@ -340,7 +346,12 @@ public final class ReflectionPlugins {
         if (targetMethod.isStatic()) {
             receiverValue = null;
         } else {
-            receiverValue = unbox(b, receiver.get(), JavaKind.Object);
+            /*
+             * Calling receiver.get(true) can add a null check guard, i.e., modifying the graph in
+             * the process. It is an error for invocation plugins that do not replace the call to
+             * modify the graph.
+             */
+            receiverValue = unbox(b, receiver.get(false), JavaKind.Object);
             if (receiverValue == null || receiverValue == NULL_MARKER) {
                 return false;
             }
@@ -440,6 +451,8 @@ public final class ReflectionPlugins {
         return null;
     }
 
+    private final boolean parseOnce = SubstrateOptions.parseOnce();
+
     /**
      * This method checks if the element should be intrinsified and returns the cached intrinsic
      * element if found. Caching intrinsic elements during analysis and reusing the same element
@@ -450,6 +463,7 @@ public final class ReflectionPlugins {
      * initialized. Therefore, we want to intrinsify the same, eagerly initialized object during
      * compilation, not a lossy copy of it.
      */
+    @SuppressWarnings("unchecked")
     private <T> T getIntrinsic(GraphBuilderContext context, T element) {
         if (reason == ParsingReason.UnsafeSubstitutionAnalysis || reason == ParsingReason.EarlyClassInitializerAnalysis) {
             /* We are analyzing the static initializers and should always intrinsify. */
@@ -459,7 +473,7 @@ public final class ReflectionPlugins {
         if (context.bciCanBeDuplicated()) {
             return null;
         }
-        if (reason == ParsingReason.PointsToAnalysis) {
+        if (parseOnce || reason == ParsingReason.PointsToAnalysis) {
             if (isDeleted(element, context.getMetaAccess())) {
                 /*
                  * Should not intrinsify. Will fail during the reflective lookup at
@@ -470,6 +484,11 @@ public final class ReflectionPlugins {
             }
 
             Object replaced = aUniverse.replaceObject(element);
+
+            if (parseOnce) {
+                /* No separate parsing for compilation, so no need to cache the result. */
+                return (T) replaced;
+            }
 
             /* During parsing for analysis we intrinsify and cache the result for compilation. */
             ImageSingletons.lookup(ReflectionPluginRegistry.class).add(context.getCallingContext(), replaced);

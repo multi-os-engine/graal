@@ -1,25 +1,43 @@
 suite = {
-  "mxversion" : "5.287.0",
+  "mxversion" : "5.301.0",
   "name": "java-benchmarks",
 
   "javac.lint.overrides": "none",
 
   "libraries" : {
-    "TIKA_1.0.1": {
-      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/tika-1.0.1-SNAPSHOT.zip"],
-      "sha1": "a1a325355ee129528221a0eae487fbe9a3895fcd",
+    "TIKA_1.0.5": {
+      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/tika-1.0.5-SNAPSHOT.zip"],
+      "sha1": "a02f0e8c4b6b77eca8f9d723cbc493b0e25c286c",
       "packedResource": True,
     },
 
-    "PETCLINIC_0.0.1": {
-      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/petclinic-jpa-0.0.1-SNAPSHOT.zip"],
-      "sha1": "4991c1d01f0fcb65e1baf7638601d32b0178dd76",
+    "PETCLINIC_0.1.5": {
+      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/petclinic-jpa-0.1.5-SNAPSHOT.zip"],
+      "sha1": "48fa6858af9c0a64212d80d9f896c59e41f90a43",
       "packedResource": True,
     },
 
-    "SHOPCART_0.3.1": {
-      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/shopcart-0.3.1.zip"],
-      "sha1": "b701cffcc76d3772678c1a23f9ddbb40ae1a93d2",
+    "SHOPCART_0.3.4": {
+      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/shopcart-0.3.4.zip"],
+      "sha1": "d6e751800914747e2549e35f7e9facf00c190b4a",
+      "packedResource": True,
+    },
+
+    "SPRING_HW_1.0.0": {
+      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/spring-hello-world-1.0.0-SNAPSHOT.zip"],
+      "sha1": "6d158cd0294506edbaaea60ae98a5ee1169c8629",
+      "packedResource": True,
+    },
+
+    "QUARKUS_HW_1.0.0": {
+      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/quarkus-hello-world-1.0.0-SNAPSHOT.zip"],
+      "sha1": "754bb7aba3119b1e706e29c0cd2ab6d1b4829d5d",
+      "packedResource": True,
+    },
+
+    "MICRONAUT_HW_1.0.0": {
+      "urls": ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/micronaut-hello-world-1.0.0.zip"],
+      "sha1": "c7d54e84fa65cc4b14e50dcba58998d389aa1fa3",
       "packedResource": True,
     },
 
@@ -331,6 +349,15 @@ suite = {
       "workingSets" : "Graal,Bench",
       "testProject" : True,
     },
+  },
+
+  "imports" : {
+    "suites": [
+      {
+        "name" : "sdk",
+        "subdir": True
+      }
+    ]
   },
 
   "distributions" : {

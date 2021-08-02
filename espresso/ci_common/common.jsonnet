@@ -50,8 +50,8 @@ local benchmark_suites = ['dacapo', 'renaissance', 'scala-dacapo'];
 
   darwin: self.common + {
     environment+: {
-      // for compatibility with macOS El Capitan
-      MACOSX_DEPLOYMENT_TARGET: '10.11',
+      // for compatibility with macOS Sierra
+      MACOSX_DEPLOYMENT_TARGET: '10.12',
     },
     capabilities: ['darwin', 'amd64'],
   },
@@ -59,7 +59,7 @@ local benchmark_suites = ['dacapo', 'renaissance', 'scala-dacapo'];
   // generic targets
   gate:            {targets+: ['gate'], timelimit: "1:00:00"},
   postMerge:       {targets+: ['post-merge']},
-  bench:           {targets+: ['bench', 'post-merge']},
+  bench:           {targets+: ['bench']},
   dailyBench:      {targets+: ['bench', 'daily']},
   daily:           {targets+: ['daily']},
   weekly:          {targets+: ['weekly']},

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -181,7 +181,7 @@ public class ReadEliminationClosure extends EffectsClosure<ReadEliminationBlockS
                                 // perform boolean coercion
                                 LogicNode cmp = IntegerEqualsNode.create(cachedValue, ConstantNode.forInt(0), NodeView.DEFAULT);
                                 ValueNode boolValue = ConditionalNode.create(cmp, ConstantNode.forBoolean(false), ConstantNode.forBoolean(true), NodeView.DEFAULT);
-                                effects.addFloatingNode(boolValue, "boolean coercion");
+                                effects.ensureFloatingAdded(boolValue);
                                 cachedValue = boolValue;
                             }
                             effects.replaceAtUsages(load, cachedValue, load);

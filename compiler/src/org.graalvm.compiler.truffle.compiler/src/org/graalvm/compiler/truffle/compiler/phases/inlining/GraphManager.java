@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -81,14 +81,13 @@ final class GraphManager {
                         rootRequest.debug,
                         truffleAST,
                         finalize ? partialEvaluator.getCallDirect() : partialEvaluator.inlineRootForCallTarget(truffleAST),
-                        rootRequest.inliningPlan,
                         rootRequest.compilationId,
                         rootRequest.log,
                         rootRequest.task);
     }
 
     private PEAgnosticInlineInvokePlugin newPlugin() {
-        return new PEAgnosticInlineInvokePlugin(rootRequest.inliningPlan, partialEvaluator);
+        return new PEAgnosticInlineInvokePlugin(rootRequest.task.inliningData(), partialEvaluator);
     }
 
     Entry peRoot(boolean truffleTierOnExpand) {

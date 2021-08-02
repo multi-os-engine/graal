@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -54,18 +54,14 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.TruffleLanguage;
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.Specialization;
-import com.oracle.truffle.api.interop.UnknownIdentifierException;
-import com.oracle.truffle.api.interop.UnsupportedMessageException;
-import com.oracle.truffle.api.library.CachedLibrary;
-import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.source.Source;
-import com.oracle.truffle.api.source.SourceSection;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
@@ -76,15 +72,25 @@ import org.junit.Assert;
 import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.Truffle;
+import com.oracle.truffle.api.TruffleLanguage;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.interop.InteropLibrary;
-import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.interop.TruffleObject;
+import com.oracle.truffle.api.interop.UnknownIdentifierException;
+import com.oracle.truffle.api.interop.UnsupportedMessageException;
+import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.library.ExportLibrary;
 import com.oracle.truffle.api.library.ExportMessage;
+import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.nodes.RootNode;
+import com.oracle.truffle.api.source.Source;
+import com.oracle.truffle.api.source.SourceSection;
 
 public class PolyglotExceptionTest extends AbstractPolyglotTest {
 
@@ -402,6 +408,7 @@ public class PolyglotExceptionTest extends AbstractPolyglotTest {
             assertTrue(e.isGuestException());
             assertFalse(e.isHostException());
             assertFalse(e.isCancelled());
+            assertEquals(e.getMessage(), "Resource exhausted: Stack overflow");
             Iterator<StackFrame> iterator = e.getPolyglotStackTrace().iterator();
             boolean foundFrame = false;
             while (iterator.hasNext()) {
@@ -437,6 +444,20 @@ public class PolyglotExceptionTest extends AbstractPolyglotTest {
             assertTrue(e.isHostException());
             assertFalse(e.isCancelled());
             // no guarantees for stack frames.
+        });
+    }
+
+    @Test
+    public void testCancelExceptionNoResourceLimit() {
+        enterContext = false;
+        setupEnv(Context.newBuilder().build());
+        context.close(true);
+        assertFails(() -> context.eval(ProxyLanguage.ID, ""), PolyglotException.class, (e) -> {
+            assertFalse(e.isResourceExhausted());
+            assertFalse(e.isInternalError());
+            assertTrue(e.isGuestException());
+            assertFalse(e.isHostException());
+            assertTrue(e.isCancelled());
         });
     }
 
@@ -490,6 +511,80 @@ public class PolyglotExceptionTest extends AbstractPolyglotTest {
             frame = iterator.next();
             assertTrue(frame.isHostFrame());
         });
+    }
+
+    @Test
+    public void testCancelDoesNotMaskInternalError() throws InterruptedException, ExecutionException {
+        enterContext = false;
+        CountDownLatch waitingStarted = new CountDownLatch(1);
+        setupEnv(Context.create(), new ProxyLanguage() {
+            @Override
+            protected CallTarget parse(ParsingRequest request) throws Exception {
+                return Truffle.getRuntime().createCallTarget(new RootNode(getCurrentLanguage()) {
+
+                    @Override
+                    public Object execute(VirtualFrame frame) {
+                        waitForever();
+                        return 42;
+                    }
+
+                    @SuppressWarnings("SynchronizationOnLocalVariableOrMethodParameter")
+                    @TruffleBoundary
+                    private void waitForever() {
+                        final Object waitObject = new Object();
+                        waitingStarted.countDown();
+                        synchronized (waitObject) {
+                            try {
+                                waitObject.wait();
+                            } catch (InterruptedException ie) {
+                                /*
+                                 * This is the internal error.
+                                 */
+                                Assert.fail();
+                            }
+                        }
+                    }
+
+                    @Override
+                    public String getName() {
+                        return "testRootName";
+                    }
+
+                });
+            }
+        });
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        Future<?> future = executorService.submit(() -> {
+            assertFails(() -> context.eval(ProxyLanguage.ID, "test"), PolyglotException.class, (e) -> {
+                assertTrue(e.isInternalError());
+                assertTrue(e.isGuestException());
+                assertFalse(e.isHostException());
+                assertFalse(e.isCancelled());
+                Iterator<StackFrame> iterator = e.getPolyglotStackTrace().iterator();
+                boolean foundGuestFrame = false;
+                boolean foundHostFrame = false;
+                while (iterator.hasNext()) {
+                    StackFrame frame = iterator.next();
+                    if (frame.isGuestFrame()) {
+                        foundGuestFrame = true;
+                        assertTrue(frame.isGuestFrame());
+                        assertEquals("testRootName", frame.getRootName());
+                    } else {
+                        if ("waitForever".equals(frame.toHostFrame().getMethodName())) {
+                            foundHostFrame = true;
+                        }
+                    }
+                }
+                assertTrue(foundGuestFrame);
+                assertTrue(foundHostFrame);
+            });
+        });
+        waitingStarted.await();
+        context.close(true);
+        future.get();
+        executorService.shutdownNow();
+        executorService.awaitTermination(100, TimeUnit.SECONDS);
     }
 
     abstract static class BaseNode extends Node {

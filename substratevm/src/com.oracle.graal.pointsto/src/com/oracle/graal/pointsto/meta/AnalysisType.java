@@ -59,6 +59,7 @@ import com.oracle.graal.pointsto.infrastructure.OriginalClassProvider;
 import com.oracle.graal.pointsto.infrastructure.WrappedJavaType;
 import com.oracle.graal.pointsto.typestate.TypeState;
 import com.oracle.graal.pointsto.util.AnalysisFuture;
+import com.oracle.graal.pointsto.util.ConcurrentLightHashSet;
 import com.oracle.svm.util.UnsafePartitionKind;
 
 import jdk.vm.ci.common.JVMCIError;
@@ -80,6 +81,10 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     private static final AtomicReferenceFieldUpdater<AnalysisType, ConstantContextSensitiveObject> UNIQUE_CONSTANT_UPDATER = //
                     AtomicReferenceFieldUpdater.newUpdater(AnalysisType.class, ConstantContextSensitiveObject.class, "uniqueConstant");
+
+    @SuppressWarnings("rawtypes")//
+    private static final AtomicReferenceFieldUpdater<AnalysisType, Object> INTERCEPTORS_UPDATER = //
+                    AtomicReferenceFieldUpdater.newUpdater(AnalysisType.class, Object.class, "interceptors");
 
     protected final AnalysisUniverse universe;
     private final ResolvedJavaType wrapped;
@@ -153,6 +158,8 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     private boolean isArray;
 
     private final int dimension;
+
+    @SuppressWarnings("unused") private volatile Object interceptors;
 
     public enum UsageKind {
         InHeap,
@@ -231,8 +238,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     private AnalysisType[] convertTypes(ResolvedJavaType[] originalTypes) {
         List<AnalysisType> result = new ArrayList<>(originalTypes.length);
         for (ResolvedJavaType originalType : originalTypes) {
-            if (!universe.platformSupported(originalType)) {
-                /* Ignore types that are not in our platform (including hosted-only types). */
+            if (universe.hostVM.skipInterface(universe, originalType, wrapped)) {
                 continue;
             }
             result.add(universe.lookup(originalType));
@@ -348,21 +354,11 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
                 /* Collect the field referenced types. */
                 for (AnalysisField field : getInstanceFields(true)) {
                     TypeState state = field.getInstanceFieldTypeState();
-                    if (!state.isUnknown()) {
-                        /*
-                         * If the field state is unknown we don't process the state. Unknown means
-                         * that the state can contain any object of any type, but the core analysis
-                         * guarantees that there is no path on which the objects of an unknown type
-                         * state are converted to and used as java objects; they are just used as
-                         * data.
-                         */
-                        for (AnalysisType type : state.types()) {
-                            /* Add the assignable types, as discovered by the static analysis. */
-                            type.getTypeFlow(bb, false).getState().types().forEach(referencedTypesSet::add);
-                        }
+                    for (AnalysisType type : state.types()) {
+                        /* Add the assignable types, as discovered by the static analysis. */
+                        type.getTypeFlow(bb, false).getState().types().forEach(referencedTypesSet::add);
                     }
                 }
-
             }
 
             referencedTypes = new ArrayList<>(referencedTypesSet);
@@ -406,6 +402,37 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     }
 
+    public static boolean verifyAssignableTypes(BigBang bb) {
+        List<AnalysisType> allTypes = bb.getUniverse().getTypes();
+
+        boolean pass = true;
+        for (AnalysisType t1 : allTypes) {
+            if (t1.assignableTypes != null) {
+                for (AnalysisType t2 : allTypes) {
+                    boolean expected;
+                    if (t2.isInstantiated()) {
+                        expected = t1.isAssignableFrom(t2);
+                    } else {
+                        expected = false;
+                    }
+                    boolean actual = t1.assignableTypes.getState().containsType(t2);
+
+                    if (actual != expected) {
+                        System.out.println("assignableTypes mismatch: " +
+                                        t1.toJavaName(true) + " (instantiated: " + t1.isInstantiated() + ") - " +
+                                        t2.toJavaName(true) + " (instantiated: " + t2.isInstantiated() + "): " +
+                                        "expected=" + expected + ", actual=" + actual);
+                        pass = false;
+                    }
+                }
+            }
+        }
+        if (!pass) {
+            throw new AssertionError("Verification of all-instantiated type flows failed");
+        }
+        return true;
+    }
+
     public static void updateAssignableTypes(BigBang bb) {
         /*
          * Update the assignable-state for all types. So do not post any update operations before
@@ -418,39 +445,39 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         Map<Integer, BitSet> newAssignableTypes = new HashMap<>();
         for (AnalysisType type : allTypes) {
             if (type.isInstantiated()) {
-                int arrayDimension = 0;
-                AnalysisType elementalType = type;
-                while (elementalType.isArray()) {
-                    elementalType = elementalType.getComponentType();
-                    arrayDimension++;
-                }
-                addTypeToAssignableLists(type.getId(), elementalType, arrayDimension, newAssignableTypes, true, bb);
-                if (arrayDimension > 0) {
-                    addTypeToAssignableLists(type.getId(), type, 0, newAssignableTypes, true, bb);
-                }
+                int arrayDimension = type.dimension;
+                AnalysisType elementalType = type.elementalType;
+
+                addTypeToAssignableLists(type.getId(), elementalType, arrayDimension, newAssignableTypes, true);
                 for (int i = 0; i < arrayDimension; i++) {
-                    addTypeToAssignableLists(type.getId(), bb.getObjectType(), i, newAssignableTypes, false, bb);
+                    addTypeToAssignableLists(type.getId(), type, i, newAssignableTypes, false);
                 }
-                if (!elementalType.isPrimitive()) {
-                    addTypeToAssignableLists(type.getId(), bb.getObjectType(), arrayDimension, newAssignableTypes, false, bb);
+                if (arrayDimension > 0 && !elementalType.isPrimitive()) {
+                    addTypeToAssignableLists(type.getId(), bb.getObjectType(), arrayDimension, newAssignableTypes, true);
                 }
             }
         }
         for (AnalysisType type : allTypes) {
-            if (type.assignableTypes != null) {
-                TypeState assignableTypeState = TypeState.forNull();
-                if (newAssignableTypes.get(type.getId()) != null) {
-                    BitSet assignableTypes = newAssignableTypes.get(type.getId());
-                    if (type.assignableTypes.getState().hasExactTypes(assignableTypes)) {
-                        /* Avoid creation of the expensive type state. */
-                        continue;
-                    }
-                    assignableTypeState = TypeState.forExactTypes(bb, newAssignableTypes.get(type.getId()), true);
-                }
-
-                updateFlow(bb, type.assignableTypes, assignableTypeState, changedFlows);
-                updateFlow(bb, type.assignableTypesNonNull, assignableTypeState.forNonNull(bb), changedFlows);
+            if (type.assignableTypes == null) {
+                /*
+                 * Computing assignable types in bulk here is much cheaper than doing it
+                 * individually when needed in updateTypeFlows.
+                 */
+                type.assignableTypes = new AllInstantiatedTypeFlow(type, TypeState.forNull());
+                type.assignableTypesNonNull = new AllInstantiatedTypeFlow(type, TypeState.forEmpty());
             }
+            TypeState assignableTypeState = TypeState.forNull();
+            if (newAssignableTypes.get(type.getId()) != null) {
+                BitSet assignableTypes = newAssignableTypes.get(type.getId());
+                if (type.assignableTypes.getState().hasExactTypes(assignableTypes)) {
+                    /* Avoid creation of the expensive type state. */
+                    continue;
+                }
+                assignableTypeState = TypeState.forExactTypes(bb, newAssignableTypes.get(type.getId()), true);
+            }
+
+            updateFlow(bb, type.assignableTypes, assignableTypeState, changedFlows);
+            updateFlow(bb, type.assignableTypesNonNull, assignableTypeState.forNonNull(bb), changedFlows);
         }
 
         for (TypeFlow<?> changedFlow : changedFlows) {
@@ -458,26 +485,18 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         }
     }
 
-    private static void addTypeToAssignableLists(int typeIdToAdd, AnalysisType elementalType, int arrayDimension, Map<Integer, BitSet> newAssignableTypes, boolean processSuperclass, BigBang bb) {
+    private static void addTypeToAssignableLists(int typeIdToAdd, AnalysisType elementalType, int arrayDimension, Map<Integer, BitSet> newAssignableTypes, boolean processType) {
         if (elementalType == null) {
             return;
         }
-
-        AnalysisType addTo = elementalType;
-        for (int i = 0; i < arrayDimension; i++) {
-            addTo = addTo.getArrayClass();
+        if (processType) {
+            int addToId = elementalType.getArrayClass(arrayDimension).getId();
+            BitSet addToBitSet = newAssignableTypes.computeIfAbsent(addToId, BitSet::new);
+            addToBitSet.set(typeIdToAdd);
         }
-        int addToId = addTo.getId();
-        if (!newAssignableTypes.containsKey(addToId)) {
-            newAssignableTypes.put(addToId, new BitSet());
-        }
-        newAssignableTypes.get(addToId).set(typeIdToAdd);
-
-        if (processSuperclass) {
-            addTypeToAssignableLists(typeIdToAdd, elementalType.getSuperclass(), arrayDimension, newAssignableTypes, true, bb);
-        }
+        addTypeToAssignableLists(typeIdToAdd, elementalType.getSuperclass(), arrayDimension, newAssignableTypes, true);
         for (AnalysisType interf : elementalType.getInterfaces()) {
-            addTypeToAssignableLists(typeIdToAdd, interf, arrayDimension, newAssignableTypes, false, bb);
+            addTypeToAssignableLists(typeIdToAdd, interf, arrayDimension, newAssignableTypes, true);
         }
     }
 
@@ -583,11 +602,22 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
                 registerAsAllocated(null);
 
                 componentType.registerAsReachable();
-                if (elementalType.isInterface()) {
-                    universe.objectType().getArrayClass(dimension).registerAsReachable();
-                }
-                if (dimension >= 2) {
-                    universe.objectType().getArrayClass(dimension - 1).registerAsReachable();
+
+                /*
+                 * For a class B extends A, the array type A[] is not a superclass of the array type
+                 * B[]. So there is no strict need to make A[] reachable when B[] is reachable. But
+                 * it turns out that this is puzzling for users, and there are frameworks that
+                 * instantiate such arrays programmatically using Array.newInstance(). To reduce the
+                 * amount of manual configuration that is necessary, we mark all array types of the
+                 * elemental supertypes and superinterfaces also as reachable.
+                 */
+                for (int i = 1; i <= dimension; i++) {
+                    if (elementalType.superClass != null) {
+                        elementalType.superClass.getArrayClass(i).registerAsReachable();
+                    }
+                    for (AnalysisType iface : elementalType.interfaces) {
+                        iface.getArrayClass(i).registerAsReachable();
+                    }
                 }
             }
 
@@ -886,6 +916,10 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         return elementalType;
     }
 
+    public boolean hasSubTypes() {
+        return subTypes != null ? subTypes.length > 0 : false;
+    }
+
     @Override
     public AnalysisMethod resolveMethod(ResolvedJavaMethod method, ResolvedJavaType callerType) {
         Object resolvedMethod = resolvedMethods.get(method);
@@ -967,6 +1001,11 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
 
     private final InstanceFieldsCache instanceFieldsCache = new InstanceFieldsCache();
 
+    public void clearInstanceFieldsCache() {
+        instanceFieldsCache.withSuper = null;
+        instanceFieldsCache.local = null;
+    }
+
     @Override
     public AnalysisField[] getInstanceFields(boolean includeSuperclasses) {
         InstanceFieldsCache cache = instanceFieldsCache;
@@ -983,7 +1022,7 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
         if (includeSupeclasses && getSuperclass() != null) {
             list.addAll(Arrays.asList(getSuperclass().getInstanceFields(true)));
         }
-        return convertFields(wrapped.getInstanceFields(false), list, includeSupeclasses);
+        return convertFields(interceptInstanceFields(wrapped.getInstanceFields(false)), list, includeSupeclasses);
     }
 
     private AnalysisField[] convertFields(ResolvedJavaField[] original, List<AnalysisField> list, boolean listIncludesSuperClassesFields) {
@@ -1152,5 +1191,21 @@ public class AnalysisType implements WrappedJavaType, OriginalClassProvider, Com
     /* Method copied from java.lang.Class. */
     public boolean isAnnotation() {
         return (getModifiers() & ANNOTATION) != 0;
+    }
+
+    public void addInstanceFieldsInterceptor(InstanceFieldsInterceptor interceptor) {
+        ConcurrentLightHashSet.addElement(this, INTERCEPTORS_UPDATER, interceptor);
+    }
+
+    private ResolvedJavaField[] interceptInstanceFields(ResolvedJavaField[] fields) {
+        ResolvedJavaField[] result = fields;
+        for (Object interceptor : ConcurrentLightHashSet.getElements(this, INTERCEPTORS_UPDATER)) {
+            result = ((InstanceFieldsInterceptor) interceptor).interceptInstanceFields(universe, result, this);
+        }
+        return result;
+    }
+
+    public interface InstanceFieldsInterceptor {
+        ResolvedJavaField[] interceptInstanceFields(AnalysisUniverse universe, ResolvedJavaField[] fields, AnalysisType type);
     }
 }

@@ -1,7 +1,7 @@
 #
 # ----------------------------------------------------------------------------------------------------
 #
-# Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -63,6 +63,7 @@ import mx_graal_tools #pylint: disable=unused-import
 
 import argparse
 import shlex
+import json
 
 # Temporary imports and (re)definitions while porting mx from Python 2 to Python 3
 if sys.version_info[0] < 3:
@@ -147,7 +148,7 @@ if os.environ.get('JVMCI_VERSION_CHECK', None) != 'ignore':
     _check_jvmci_version(jdk)
 
 mx_gate.add_jacoco_includes(['org.graalvm.*'])
-mx_gate.add_jacoco_excludes(['com.oracle.truffle.*'])
+mx_gate.add_jacoco_excludes(['com.oracle.truffle'])
 mx_gate.add_jacoco_excluded_annotations(['@Snippet', '@ClassSubstitution'])
 
 def _get_XX_option_value(vmargs, name, default):
@@ -694,6 +695,9 @@ def _unittest_config_participant(config):
     if _get_XX_option_value(vmArgs, 'TypeProfileWidth', None) is None:
         vmArgs.append('-XX:TypeProfileWidth=8')
 
+    # TODO: GR-31197, this should be removed.
+    vmArgs.append('-Dpolyglot.engine.DynamicCompilationThresholds=false')
+    vmArgs.append('-Dpolyglot.engine.AllowExperimentalOptions=true')
     return (vmArgs, mainClass, mainClassArgs)
 
 mx_unittest.add_config_participant(_unittest_config_participant)
@@ -978,6 +982,61 @@ def run_vm_with_jvmci_compiler(args, nonZeroIsFatal=True, out=None, err=None, cw
     jvmci_args = ['-XX:+UseJVMCICompiler'] + args
     return run_vm(jvmci_args, nonZeroIsFatal=nonZeroIsFatal, out=out, err=err, cwd=cwd, timeout=timeout, debugLevel=debugLevel, vmbuild=vmbuild)
 
+def _check_latest_jvmci_version(jdk):
+    """
+    If `jdk` is a JVMCI JDK, checks that its JVMCI version is the same as
+    the JVMCI version as the JVMCI JDKs in "jdks" section in the top level
+    ``common.json`` file and issues a warning if it is not.
+    """
+    jvmci_re = re.compile(r'.*-jvmci-(\d+)\.(\d+)-b(\d+)')
+    common_path = join(_suite.dir, '..', 'common.json')
+
+    def get_current_jvmci_version():
+        out = mx.LinesOutputCapture()
+        mx.run([jdk.java, '-XshowSettings:properties', '-version'], out=out, err=out)
+        for line in out.lines:
+            if 'java.vm.version = ' in line:
+                version = line.split('=', 1)[1].strip()
+                m = jvmci_re.match(version)
+                if m:
+                    return tuple(int(n) for n in m.group(1, 2, 3))
+                break
+        return None
+
+    def get_latest_jvmci_version():
+        with open(common_path) as common_file:
+            common_cfg = json.load(common_file)
+
+        latest = None
+        for distribution in common_cfg['jdks']:
+            version = common_cfg['jdks'][distribution].get('version', None)
+            if version and '-jvmci-' in version:
+                current = tuple(int(n) for n in jvmci_re.match(version).group(1, 2, 3))
+                if latest is None:
+                    latest = current
+                elif latest != current:
+                    # All JVMCI JDKs in common.json are expected to have the same JVMCI version.
+                    # If they don't then the repo is in some transitionary state
+                    # (e.g. making a JVMCI release) so skip the check.
+                    return None
+        return latest
+
+    def jvmci_version_str(version):
+        major, minor, build = version
+        return 'jvmci-{}.{}-b{:02d}'.format(major, minor, build)
+
+    current, latest = get_current_jvmci_version(), get_latest_jvmci_version()
+    if current is not None and latest is not None and current < latest:
+        common_path = os.path.normpath(common_path)
+        msg = 'JVMCI version of JAVA_HOME is older than in {}: {} < {} '.format(
+            common_path,
+            jvmci_version_str(current),
+            jvmci_version_str(latest))
+        msg += os.linesep + 'This poses the risk of hitting JVMCI bugs that have already been fixed.'
+        msg += os.linesep + 'Consider using {}, which you can get via:'.format(jvmci_version_str(latest))
+        msg += os.linesep + 'mx fetch-jdk --configuration {} --to ~/.mx/cache/jdks'.format(common_path)
+        mx.warn(msg)
+
 class GraalArchiveParticipant:
     providersRE = re.compile(r'(?:META-INF/versions/([1-9][0-9]*)/)?META-INF/providers/(.+)')
 
@@ -990,6 +1049,16 @@ class GraalArchiveParticipant:
         self.arc = arc
 
     def __add__(self, arcname, contents): # pylint: disable=unexpected-special-method-signature
+
+        def add_serviceprovider(service, provider, version):
+            if version is None:
+                # Non-versioned service
+                self.services.setdefault(service, []).append(provider)
+            else:
+                # Versioned service
+                services = self.services.setdefault(int(version), {})
+                services.setdefault(service, []).append(provider)
+
         m = GraalArchiveParticipant.providersRE.match(arcname)
         if m:
             if self.isTest:
@@ -1002,23 +1071,25 @@ class GraalArchiveParticipant:
                 for service in _decode(contents).strip().split(os.linesep):
                     assert service
                     version = m.group(1)
-                    if version is None:
-                        # Non-versioned service
-                        self.services.setdefault(service, []).append(provider)
-                    else:
-                        # Versioned service
-                        services = self.services.setdefault(int(version), {})
-                        services.setdefault(service, []).append(provider)
+                    add_serviceprovider(service, provider, version)
             return True
-        elif arcname.endswith('_OptionDescriptors.class') and not arcname.startswith('META-INF/'):
+        elif arcname.endswith('_OptionDescriptors.class'):
             if self.isTest:
                 mx.warn('@Option defined in test code will be ignored: ' + arcname)
             else:
                 # Need to create service files for the providers of the
                 # jdk.internal.vm.ci.options.Options service created by
                 # jdk.internal.vm.ci.options.processor.OptionProcessor.
+                version_prefix = 'META-INF/versions/'
+                if arcname.startswith(version_prefix):
+                    # If OptionDescriptor is version-specific, get version
+                    # from arcname and adjust arcname to non-version form
+                    version, _, arcname = arcname[len(version_prefix):].partition('/')
+                else:
+                    version = None
                 provider = arcname[:-len('.class'):].replace('/', '.')
-                self.services.setdefault('org.graalvm.compiler.options.OptionDescriptors', []).append(provider)
+                service = 'org.graalvm.compiler.options.OptionDescriptors'
+                add_serviceprovider(service, provider, version)
         return False
 
     def __addsrc__(self, arcname, contents):
@@ -1026,6 +1097,11 @@ class GraalArchiveParticipant:
 
     def __closing__(self):
         _record_last_updated_jar(self.dist, self.arc.path)
+        if self.dist.name == 'GRAAL':
+            # Check if we're using the same JVMCI JDK as the CI system does.
+            # This only done when building the GRAAL distribution so as to
+            # not be too intrusive.
+            _check_latest_jvmci_version(jdk)
 
 mx.add_argument('--vmprefix', action='store', dest='vm_prefix', help='prefix for running the VM (e.g. "gdb --args")', metavar='<prefix>')
 mx.add_argument('--gdb', action='store_const', const='gdb --args', dest='vm_prefix', help='alias for --vmprefix "gdb --args"')

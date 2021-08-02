@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -197,19 +197,16 @@ public class AArch64Move {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
-            try (ScratchRegister addrReg = masm.getScratchRegister()) {
-                AArch64Address address = loadStackSlotAddress(crb, masm, (StackSlot) slot, addrReg.getRegister());
-                PlatformKind kind = AArch64Kind.QWORD;
-                masm.loadAddress(asRegister(result, kind), address, kind.getSizeInBytes());
-            }
+            /* Address of slot in stack will be sp + displacement. */
+            int displacement = crb.frameMap.offsetForStackSlot((StackSlot) slot);
+            masm.add(64, asRegister(result), sp, displacement);
         }
     }
 
     public static class MembarOp extends AArch64LIRInstruction {
         public static final LIRInstructionClass<MembarOp> TYPE = LIRInstructionClass.create(MembarOp.class);
 
-        // For future use.
-        @SuppressWarnings("unused") private final int barriers;
+        private final int barriers;
 
         public MembarOp(int barriers) {
             super(TYPE);
@@ -217,10 +214,7 @@ public class AArch64Move {
         }
 
         @Override
-        // The odd-looking @SuppressWarnings("all") is here because of
-        // a compiler bug which warns that crb is unused, and also
-        // warns that @SuppressWarnings("unused") is unnecessary.
-        public void emitCode(@SuppressWarnings("all") CompilationResultBuilder crb, AArch64MacroAssembler masm) {
+        public void emitCode(CompilationResultBuilder crb, AArch64MacroAssembler masm) {
             assert barriers >= MemoryBarriers.LOAD_LOAD && barriers <= (MemoryBarriers.STORE_STORE | MemoryBarriers.STORE_LOAD | MemoryBarriers.LOAD_STORE | MemoryBarriers.LOAD_LOAD);
             switch (barriers) {
                 case MemoryBarriers.STORE_STORE:
@@ -260,7 +254,7 @@ public class AArch64Move {
             if (state != null) {
                 int implicitExceptionPosition = prePosition;
                 // Adjust implicit exception position if this ldr/str has been merged to ldp/stp.
-                if (kind.isInteger() && prePosition == masm.position() && masm.isImmLoadStoreMerged()) {
+                if (prePosition == masm.position() && masm.isImmLoadStoreMerged()) {
                     implicitExceptionPosition = prePosition - 4;
                     if (crb.isImplicitExceptionExist(implicitExceptionPosition)) {
                         return;
@@ -690,7 +684,7 @@ public class AArch64Move {
 
     private static AArch64Address loadStackSlotAddress(CompilationResultBuilder crb, AArch64MacroAssembler masm, StackSlot slot, Register scratchReg) {
         int displacement = crb.frameMap.offsetForStackSlot(slot);
-        int size = slot.getPlatformKind().getSizeInBytes() * 8;
+        int size = slot.getPlatformKind().getSizeInBytes() * Byte.SIZE;
         return masm.makeAddress(size, sp, displacement, scratchReg);
     }
 
@@ -766,22 +760,22 @@ public class AArch64Move {
             // result = (ptr - base) >> shift
             if (!encoding.hasBase()) {
                 if (encoding.hasShift()) {
-                    masm.lshr(64, resultRegister, ptr, encoding.getShift());
+                    masm.lsr(64, resultRegister, ptr, encoding.getShift());
                 } else {
                     masm.movx(resultRegister, ptr);
                 }
             } else if (nonNull) {
                 masm.sub(64, resultRegister, ptr, base);
                 if (encoding.hasShift()) {
-                    masm.lshr(64, resultRegister, resultRegister, encoding.getShift());
+                    masm.lsr(64, resultRegister, resultRegister, encoding.getShift());
                 }
             } else {
                 // if ptr is null it still has to be null after compression
                 masm.cmp(64, ptr, 0);
-                masm.cmov(64, resultRegister, ptr, base, AArch64Assembler.ConditionFlag.NE);
+                masm.csel(64, resultRegister, ptr, base, AArch64Assembler.ConditionFlag.NE);
                 masm.sub(64, resultRegister, resultRegister, base);
                 if (encoding.hasShift()) {
-                    masm.lshr(64, resultRegister, resultRegister, encoding.getShift());
+                    masm.lsr(64, resultRegister, resultRegister, encoding.getShift());
                 }
             }
         }
@@ -852,7 +846,7 @@ public class AArch64Move {
         @Override
         protected final void emitConversion(Register resultRegister, Register inputRegister, Register nullRegister, AArch64MacroAssembler masm) {
             masm.cmp(64, inputRegister, nullRegister);
-            masm.cmov(64, resultRegister, zr, inputRegister, AArch64Assembler.ConditionFlag.EQ);
+            masm.csel(64, resultRegister, zr, inputRegister, AArch64Assembler.ConditionFlag.EQ);
         }
     }
 
@@ -866,7 +860,7 @@ public class AArch64Move {
         @Override
         protected final void emitConversion(Register resultRegister, Register inputRegister, Register nullRegister, AArch64MacroAssembler masm) {
             masm.cmp(64, inputRegister, zr);
-            masm.cmov(64, resultRegister, nullRegister, inputRegister, AArch64Assembler.ConditionFlag.EQ);
+            masm.csel(64, resultRegister, nullRegister, inputRegister, AArch64Assembler.ConditionFlag.EQ);
         }
     }
 

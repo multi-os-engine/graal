@@ -66,12 +66,17 @@ public final class Target_java_lang_Thread {
      *
      * After JDK 11, a field with same name has been introduced and the logic to set / reset it has
      * moved into Java code. So this injected field and the substitutions that maintain it are no
-     * longer necessary.
+     * longer necessary. See {@link #interruptedJDK14OrLater}.
      */
     @Inject //
     @TargetElement(onlyWith = JDK11OrEarlier.class) //
-    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
     volatile boolean interrupted;
+
+    @Alias //
+    @TargetElement(name = "interrupted", onlyWith = JDK14OrLater.class) //
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
+    volatile boolean interruptedJDK14OrLater;
 
     @Inject @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)//
     boolean wasStartedByCurrentIsolate;
@@ -202,7 +207,19 @@ public final class Target_java_lang_Thread {
         contextClassLoader = ClassLoader.getSystemClassLoader();
     }
 
-    @Uninterruptible(reason = "called from uninterruptible code", mayBeInlined = true)
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Substitute
+    public long getId() {
+        return tid;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
+    @Substitute
+    public boolean isDaemon() {
+        return daemon;
+    }
+
+    @Uninterruptible(reason = "Called from uninterruptible code.", mayBeInlined = true)
     @Substitute
     @TargetElement(onlyWith = NotLoomJDK.class)
     static Thread currentThread() {
@@ -376,6 +393,14 @@ public final class Target_java_lang_Thread {
     private void setPriority0(int priority) {
     }
 
+    /**
+     * Avoid in VM-internal contexts: this method is not {@code final} and can be overridden with
+     * code that does locking or performs other actions that can be unsafe in a specific context.
+     * Use {@link JavaThreads#isInterrupted} instead.
+     */
+    @Alias
+    public native boolean isInterrupted();
+
     @Substitute
     @TargetElement(onlyWith = JDK11OrEarlier.class)
     private boolean isInterrupted(boolean clearInterrupted) {
@@ -419,6 +444,8 @@ public final class Target_java_lang_Thread {
         Thread thread = JavaThreads.fromTarget(this);
         JavaThreads.interrupt(thread);
         JavaThreads.unpark(thread);
+        // Must be executed after setting interrupted to true, see
+        // HeapImpl.waitForReferencePendingList()
         JavaThreads.wakeUpVMConditionWaiters(thread);
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * The Universal Permissive License (UPL), Version 1.0
@@ -44,6 +44,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
 import org.graalvm.polyglot.PolyglotException;
@@ -165,9 +166,12 @@ public final class TruffleContext implements AutoCloseable {
      * times from the same thread. If the context is currently not entered by any thread then it is
      * allowed be entered by an arbitrary thread. Entering the context from two or more different
      * threads at the same time is possible, unless one of the loaded languages denies access to the
-     * thread, in which case an {@link IllegalStateException} is thrown. The result of the enter
-     * function is unspecified and must only be passed to {@link #leave(Node, Object)}. The result
-     * value must not be stored permanently.
+     * thread, in which case an {@link IllegalStateException} is thrown.
+     * <p>
+     * If the current thread was not previously entered in any context, the enter function returns
+     * {@code null}. If the return value is not {@code null}, the result of the enter function is
+     * unspecified and must only be passed to {@link #leave(Node, Object)}. The result value must
+     * not be stored permanently.
      * <p>
      * An adopted node may be passed to allow perform optimizations on the fast-path. If a
      * <code>null</code> node is passed then entering a context will result in a
@@ -257,6 +261,50 @@ public final class TruffleContext implements AutoCloseable {
     public boolean isCancelling() {
         try {
             return LanguageAccessor.engineAccess().isContextCancelling(polyglotContext);
+        } catch (Throwable t) {
+            throw Env.engineToLanguageException(t);
+        }
+    }
+
+    /**
+     * Pause execution on all threads for this context. This call does not wait for the threads to
+     * be actually paused. Instead, a future is returned that can be used to wait for the execution
+     * to be paused. The future is completed when all active threads are paused. New threads entered
+     * after this point are paused immediately after entering until
+     * {@link TruffleContext#resume(Future)} is called.
+     *
+     * @return a future that can be used to wait for the execution to be paused. Also, the future is
+     *         used to resume execution by passing it to the {@link TruffleContext#resume(Future)}
+     *         method.
+     *
+     * @since 21.2
+     */
+    @TruffleBoundary
+    public Future<Void> pause() {
+        try {
+            return LanguageAccessor.engineAccess().pause(polyglotContext);
+        } catch (Throwable t) {
+            throw Env.engineToLanguageException(t);
+        }
+    }
+
+    /**
+     * Resume previously paused execution on all threads for this context. The execution will not
+     * resume if {@link TruffleContext#pause()} was called multiple times and for some of the other
+     * calls resume was not called yet.
+     *
+     * @param pauseFuture pause future returned by a previous call to
+     *            {@link TruffleContext#pause()}.
+     *
+     * @throws IllegalArgumentException in case the passed pause future was not obtained by a
+     *             previous call to {@link TruffleContext#pause()} on this context.
+     *
+     * @since 21.2
+     */
+    @TruffleBoundary
+    public void resume(Future<Void> pauseFuture) {
+        try {
+            LanguageAccessor.engineAccess().resume(polyglotContext, pauseFuture);
         } catch (Throwable t) {
             throw Env.engineToLanguageException(t);
         }

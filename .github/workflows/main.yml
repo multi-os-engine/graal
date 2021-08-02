@@ -5,11 +5,26 @@ on:
     paths-ignore:
       - '.travis.yml'
       - '.github/workflows/quarkus.yml'
+      - '**.md'
   pull_request:
     paths-ignore:
       - '.travis.yml'
       - '.github/workflows/quarkus.yml'
+      - '**.md'
   workflow_dispatch: []
+
+# The following aims to reduce CI CPU cycles by:
+# 1. Cancelling any previous builds of this PR when pushing new changes to it
+# 2. Cancelling any previous builds of a branch when pushing new changes to it in a fork
+# 3. Cancelling any pending builds, but not active ones, when pushing to a branch in the main
+#    repository. This prevents us from constantly cancelling CI runs, while being able to skip
+#    intermediate builds. E.g., if we perform two pushes the first one will start a CI job and
+#    the second one will add another one to the queue; if we perform a third push while the
+#    first CI job is still running the previously queued CI job (for the second push) will be
+#    cancelled and a new CI job will be queued for the latest (third) push.
+concurrency:
+  group: "workflow = ${{ github.workflow }}, ref = ${{ github.event.ref }}, pr = ${{ github.event.pull_request.id }}"
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.repository != 'oracle/graal' }}
 
 env:
   LANG: en_US.UTF-8
@@ -99,13 +114,16 @@ jobs:
       run: |
         mkdir jdk-dl
         ${MX_PATH}/mx fetch-jdk --java-distribution ${JDK} --to jdk-dl --alias ${JAVA_HOME}
+    - name: Update dependency cache
+      if: ${{ contains(matrix.env.GATE, 'debug') || contains(matrix.env.GATE, 'style') }}
+      run: sudo apt update
     - name: Debug dependencies
       if: ${{ contains(matrix.env.GATE, 'debug') }}
       run: sudo apt install gdb
     - name: Style dependencies
       if: ${{ contains(matrix.env.GATE, 'style') }}
       run: |
-        sudo apt install python-pip
+        sudo apt install python-pip python-setuptools 
         sudo pip install astroid==1.1.0
         sudo pip install pylint==1.1.0
     - name: Build GraalVM and run gate

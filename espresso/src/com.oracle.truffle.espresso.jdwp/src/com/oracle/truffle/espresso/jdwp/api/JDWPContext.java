@@ -466,7 +466,7 @@ public interface JDWPContext {
      * @param redefineInfos the information about the original class and the new class bytes
      * @return 0 on success or the appropriate {@link ErrorCodes} if an error occur
      */
-    int redefineClasses(RedefineInfo[] redefineInfos);
+    int redefineClasses(List<RedefineInfo> redefineInfos);
 
     /**
      * Exit all monitors that was entered by the frame.
@@ -483,11 +483,18 @@ public interface JDWPContext {
     void abort(int exitCode);
 
     /**
-     * Returns the nearest {@link com.oracle.truffle.api.instrumentation.InstrumentableNode node} or
-     * <code>null</code>. The nodes are traversed by walking the parent node hierarchy.
+     * Determines if the current thread is a VM internal thread.
      *
-     * @param node the node
-     * @return the nearest instrumentable node
+     * @return true if current thread is a VM internal thread
      */
-    Node getInstrumentableNode(Node node);
+    boolean isSystemThread();
+
+    /**
+     * Returns the current BCI of the node.
+     *
+     * @param rawNode the current node
+     * @param frame the current frame
+     * @return the current bci
+     */
+    long getBCI(Node rawNode, Frame frame);
 }
