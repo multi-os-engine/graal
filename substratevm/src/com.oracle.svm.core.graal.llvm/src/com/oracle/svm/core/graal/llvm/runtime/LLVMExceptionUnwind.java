@@ -38,7 +38,6 @@ import org.graalvm.nativeimage.c.function.CEntryPoint;
 import org.graalvm.nativeimage.c.function.CFunction;
 import org.graalvm.nativeimage.c.struct.CField;
 import org.graalvm.nativeimage.c.struct.CStruct;
-import org.graalvm.nativeimage.c.struct.SizeOf;
 import org.graalvm.word.Pointer;
 import org.graalvm.word.PointerBase;
 import org.graalvm.word.WordFactory;
@@ -145,19 +144,7 @@ public class LLVMExceptionUnwind {
         return new ExceptionUnwind() {
             @Override
             protected void customUnwindException(Pointer callerSP) {
-                int size = SizeOf.get(_Unwind_Exception.class);
-                // Alloc more space for extra alignment
-                size += 16;
-
-                _Unwind_Exception exceptionStructure = StackValue.get(size);
-
-                // Get the raw address of the pointer
-                long addr = exceptionStructure.rawValue();
-                // Make sure the addr is aligned to at least 16 bytes
-                addr = (addr + 15L) & ~(15L);
-                // Convert back
-                exceptionStructure = WordFactory.pointer(addr);
-
+                _Unwind_Exception exceptionStructure = StackValue.get(_Unwind_Exception.class);
                 exceptionStructure.set_exception_class(CurrentIsolate.getCurrentThread());
                 exceptionStructure.set_exception_cleanup(WordFactory.nullPointer());
                 raiseException(exceptionStructure);
