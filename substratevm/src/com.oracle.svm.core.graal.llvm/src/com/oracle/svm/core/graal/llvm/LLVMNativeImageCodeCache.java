@@ -43,6 +43,7 @@ import java.util.function.IntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import com.oracle.svm.shadowed.org.bytedeco.javacpp.Loader;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.debug.DebugContext;
@@ -177,8 +178,8 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         stackMapDumper.startDumpingFunctions();
 
         executor.forEach(numBatches, batchId -> (debugContext) -> {
-            llvmOptimize(debug, getBatchOptimizedFilename(batchId), getBatchBitcodeFilename(batchId));
-            llvmCompile(debug, getBatchCompiledFilename(batchId), getBatchOptimizedFilename(batchId));
+            //llvmOptimize(debug, getBatchOptimizedFilename(batchId), getBatchBitcodeFilename(batchId));
+            llvmCompile(debug, getBatchCompiledFilename(batchId), getBatchBitcodeFilename(batchId));
 
             LLVMStackMapInfo stackMap = objectFileReader.parseStackMap(getBatchCompiledPath(batchId));
             IntStream.range(getBatchStart(batchId), getBatchEnd(batchId)).forEach(id -> objectFileReader.readStackMap(stackMap, compilations.get(methodIndex[id]), methodIndex[id], id));
@@ -210,6 +211,7 @@ public class LLVMNativeImageCodeCache extends NativeImageCodeCache {
         buildRuntimeMetadata(new MethodPointer(firstMethod), WordFactory.signed(textSectionInfo.getCodeSize()));
     }
 
+    //TODO Optimization currently not supported
     private void llvmOptimize(DebugContext debug, String outputPath, String inputPath) {
         List<String> args = new ArrayList<>();
         if (LLVMOptions.BitcodeOptimizations.getValue()) {

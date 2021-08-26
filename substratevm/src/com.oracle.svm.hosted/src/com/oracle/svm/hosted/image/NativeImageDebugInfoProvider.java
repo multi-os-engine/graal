@@ -85,7 +85,7 @@ import jdk.vm.ci.meta.Signature;
  * Implementation of the DebugInfoProvider API interface that allows type, code and heap data info
  * to be passed to an ObjectFile when generation of debug info is enabled.
  */
-class NativeImageDebugInfoProvider implements DebugInfoProvider {
+public class NativeImageDebugInfoProvider implements DebugInfoProvider {
     private final DebugContext debugContext;
     private final NativeImageCodeCache codeCache;
     @SuppressWarnings("unused") private final NativeImageHeap heap;
@@ -195,7 +195,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         return hostedType.getWrapped().getWrapped();
     }
 
-    protected static ResolvedJavaType getDeclaringClass(HostedMethod hostedMethod, boolean wantOriginal) {
+    public static ResolvedJavaType getDeclaringClass(HostedMethod hostedMethod, boolean wantOriginal) {
         if (wantOriginal) {
             return getOriginal(hostedMethod.getDeclaringClass());
         }
@@ -240,7 +240,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
         return targetMethod.getModifiers();
     }
 
-    private static String toJavaName(JavaType javaType) {
+    public static String toJavaName(JavaType javaType) {
         if (javaType instanceof HostedType) {
             return getDeclaringClass((HostedType) javaType, true).toJavaName();
         }

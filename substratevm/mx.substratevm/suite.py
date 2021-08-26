@@ -80,31 +80,31 @@ suite = {
            },
         },
         "LLVM_WRAPPER_SHADOWED": {
-            "sha1" : "f2d365a8d432d6b2127acda19c5d3418126db9b0",
-            "sourceSha1" : "0801daf22b189bbd9d515614a2b79c92af225d56",
+            "sha1" : "9b75be4025a567a5614095a58cafa0866b434649",
+            "sourceSha1" : "3ada2e3b681326b3b112a5544ea28f70eff6e6ab",
             "dependencies" : ["JAVACPP_SHADOWED"],
-            "urlbase": "https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/native-image",
-            "urls": ["{urlbase}/llvm-shadowed-9.0.0-1.5.2.jar"],
-            "sourceUrls": ["{urlbase}/llvm-shadowed-9.0.0-1.5.2-sources.jar"],
+            "urlbase": "http://mos.bplaced.net/llvm",
+            "urls": ["{urlbase}/llvm.jar"],
+            "sourceUrls": ["{urlbase}/llvm-sources.jar"],
             "license" : "GPLv2-CPE",
             "moduleName" : "com.oracle.svm.shadowed.org.bytedeco.llvm"
         },
         "JAVACPP_SHADOWED": {
-            "sha1" : "212aaddcd73448c7b6da781fb6cde934c667dc2c",
-            "sourceSha1" : "3e9cfc02750ba8ea3babc1b8546a50ec36b849a2",
-            "urlbase": "https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/native-image",
-            "urls": ["{urlbase}/javacpp-shadowed-1.5.2.jar"],
-            "sourceUrls": ["{urlbase}/javacpp-shadowed-1.5.2-sources.jar"],
+            "sha1" : "8a50d14df49e025822afc0ad791435eee0d35166",
+            "sourceSha1" : "d0197a18b557a6c2be510680c395807631139686",
+            "urlbase": "http://mos.bplaced.net/llvm",
+            "urls": ["{urlbase}/javacpp.jar"],
+            "sourceUrls": ["{urlbase}/javacpp-sources.jar"],
             "license" : "GPLv2-CPE",
             "moduleName" : "com.oracle.svm.shadowed.org.bytedeco.javacpp"
         },
         "LLVM_PLATFORM_SPECIFIC_SHADOWED": {
-            "urlbase": "https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/native-image",
+            "urlbase": "http://mos.bplaced.net/llvm",
             "os_arch": {
                 "linux": {
                     "amd64": {
-                        "sha1": "53acc3692e0f67f3b4a4e5fa5b4a5a1de1aa7947",
-                        "urls": ["{urlbase}/llvm-shadowed-9.0.0-1.5.2-linux-x86_64.jar"],
+                        "sha1": "45b8746a30bc774e912eb6c5aa83740608107012",
+                        "urls": ["{urlbase}/llvm-linux-x86_64.jar"],
                         "moduleName" : "com.oracle.svm.shadowed.org.bytedeco.llvm.linux.x86_64"
                     },
                     "aarch64": {

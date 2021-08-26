@@ -453,9 +453,8 @@ public abstract class NativeImage extends AbstractImage {
             /*
              * If we constructed debug info give the object file a chance to install it
              */
-            if (SubstrateOptions.GenerateDebugInfo.getValue(HostedOptionValues.singleton()) > 0) {
+            if (SubstrateOptions.GenerateDebugInfo.getValue(HostedOptionValues.singleton()) > 0 && !SubstrateOptions.useLLVMBackend()) {
                 try (Timer.StopTimer t = new Timer(imageName, "dbginfo").start()) {
-                    ImageSingletons.add(SourceManager.class, new SourceManager());
                     DebugInfoProvider provider = new NativeImageDebugInfoProvider(debug, codeCache, heap);
                     objectFile.installDebugInfo(provider);
                 }

@@ -24,21 +24,8 @@
  */
 package com.oracle.svm.core.graal.llvm.util;
 
-import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.ENUM_ATTRIBUTE_VALUE;
-import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.FALSE;
-import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.TRUE;
-import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.dumpTypes;
-import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.dumpValues;
-import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
-
-import java.util.Arrays;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import org.graalvm.compiler.core.common.NumUtil;
-import org.graalvm.compiler.core.common.calc.Condition;
-
 import com.oracle.svm.core.FrameAccess;
+import com.oracle.svm.core.graal.llvm.debug.LLVMDebugInfoBuilder;
 import com.oracle.svm.shadowed.org.bytedeco.javacpp.BytePointer;
 import com.oracle.svm.shadowed.org.bytedeco.javacpp.Pointer;
 import com.oracle.svm.shadowed.org.bytedeco.javacpp.PointerPointer;
@@ -51,6 +38,21 @@ import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMModuleRef;
 import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMTypeRef;
 import com.oracle.svm.shadowed.org.bytedeco.llvm.LLVM.LLVMValueRef;
 import com.oracle.svm.shadowed.org.bytedeco.llvm.global.LLVM;
+import jdk.vm.ci.meta.ResolvedJavaMethod;
+import org.graalvm.compiler.core.common.NumUtil;
+import org.graalvm.compiler.core.common.calc.Condition;
+import org.graalvm.compiler.debug.DebugContext;
+
+import java.util.Arrays;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.ENUM_ATTRIBUTE_VALUE;
+import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.FALSE;
+import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.TRUE;
+import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.dumpTypes;
+import static com.oracle.svm.core.graal.llvm.util.LLVMUtils.dumpValues;
+import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
 
 public class LLVMIRBuilder implements AutoCloseable {
     private static final String DEFAULT_INSTR_NAME = "";
@@ -78,6 +80,10 @@ public class LLVMIRBuilder implements AutoCloseable {
         this.function = null;
         this.primary = false;
         this.helpers = null;
+    }
+
+    public LLVMDebugInfoBuilder createDIBuilder(ResolvedJavaMethod method) {
+        return new LLVMDebugInfoBuilder(DebugContext.forCurrentThread(), method, context, module, builder);
     }
 
     public void setMainFunction(String functionName, LLVMTypeRef functionType) {
@@ -186,7 +192,7 @@ public class LLVMIRBuilder implements AutoCloseable {
         NoRedZone("noredzone"),
         StatepointID("statepoint-id");
 
-        private String name;
+        public String name;
 
         Attribute(String name) {
             this.name = name;
@@ -796,6 +802,8 @@ public class LLVMIRBuilder implements AutoCloseable {
         buildIntrinsicCall("llvm.debugtrap", functionType(voidType()));
     }
 
+
+    // TODO: 15.08.2021 RELEVANTE ZEILE!!!!
     public LLVMValueRef functionEntryCount(LLVMValueRef count) {
         String functionEntryCountName = "function_entry_count";
         LLVMValueRef[] values = new LLVMValueRef[2];

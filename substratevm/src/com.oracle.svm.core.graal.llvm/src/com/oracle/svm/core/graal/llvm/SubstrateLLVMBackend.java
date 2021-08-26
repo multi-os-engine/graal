@@ -122,6 +122,7 @@ public class SubstrateLLVMBackend extends SubstrateBackend {
 
             /* LLVM generation */
             generate(nodeBuilder, graph);
+            nodeBuilder.llvmDebugInfoBuilder.finalizeBuilder();
             byte[] bitcode = generator.getBitcode();
             result.setTargetCode(bitcode, bitcode.length);
 

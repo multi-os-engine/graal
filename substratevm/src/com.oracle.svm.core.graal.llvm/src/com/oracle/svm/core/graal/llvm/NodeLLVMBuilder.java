@@ -27,6 +27,7 @@ package com.oracle.svm.core.graal.llvm;
 import static org.graalvm.compiler.debug.GraalError.shouldNotReachHere;
 import static org.graalvm.compiler.debug.GraalError.unimplemented;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,6 +38,11 @@ import java.util.Set;
 
 import jdk.vm.ci.meta.PlatformKind;
 import jdk.vm.ci.meta.ValueKind;
+import com.oracle.svm.core.graal.llvm.debug.LLVMDebugInfoBuilder;
+import com.oracle.objectfile.debugentry.TypeEntry;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider;
+import com.oracle.svm.core.graal.llvm.debug.LLVMDebugInfoBuilder;
+import com.oracle.svm.core.graal.llvm.debug.LLVMNativeImageDebugInfoProvider;
 import org.graalvm.compiler.code.CompilationResult;
 import org.graalvm.compiler.core.common.NumUtil;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -131,8 +137,10 @@ import jdk.vm.ci.meta.Value;
 public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuilder {
     private final LLVMGenerator gen;
     private final LLVMIRBuilder builder;
-    private final RuntimeConfiguration runtimeConfiguration;
     private final DebugInfoBuilder debugInfoBuilder;
+    private final LLVMNativeImageDebugInfoProvider debugInfoProvider;
+    private final RuntimeConfiguration runtimeConfiguration;
+    public final LLVMDebugInfoBuilder llvmDebugInfoBuilder;
 
     private Map<Node, LLVMValueWrapper> valueMap = new HashMap<>();
     private final Set<AbstractBlockBase<?>> processedBlocks = new HashSet<>();
@@ -142,8 +150,11 @@ public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuil
     protected NodeLLVMBuilder(StructuredGraph graph, LLVMGenerator gen, RuntimeConfiguration runtimeConfiguration) {
         this.gen = gen;
         this.builder = gen.getBuilder();
+        // TODO The right place for the debuginfobuilder?
+        this.llvmDebugInfoBuilder = builder.createDIBuilder(graph.method());
         this.runtimeConfiguration = runtimeConfiguration;
         this.debugInfoBuilder = new SubstrateDebugInfoBuilder(graph, gen.getProviders().getMetaAccessExtensionProvider(), this);
+        this.debugInfoProvider = new LLVMNativeImageDebugInfoProvider(graph.getDebug());
         setCompilationResultMethod(gen.getCompilationResult(), graph);
 
         for (Block block : graph.getLastSchedule().getCFG().getBlocks()) {
@@ -278,6 +289,19 @@ public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuil
 
         for (Node node : blockMap.get(block)) {
             if (node instanceof ValueNode) {
+                DebugInfoProvider.DebugLineInfo debugLineInfo = debugInfoProvider.getLineInfo(node.getNodeSourcePosition());
+                if(debugLineInfo != null) {
+
+                    int line = debugLineInfo.line();
+                    if (line != -1){
+                        /*
+                        *TODO Do this before or after emiting the node?
+                        * */
+                        llvmDebugInfoBuilder.emitLocation(line);
+                    }else {
+                        //TODO When is this the
+                    }
+                }
                 /*
                  * There can be cases in which the result of an instruction is already set before by
                  * other instructions.
@@ -500,7 +524,6 @@ public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuil
         LIRFrameState state = state(i);
         state.initDebugInfo(null, false);
         DebugInfo debugInfo = state.debugInfo();
-
         LLVMValueRef callee;
         boolean isVoid;
         LLVMValueRef[] args = getCallArguments(arguments, callTarget.callType(), targetMethod);

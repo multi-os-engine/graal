@@ -41,7 +41,8 @@ public class LLVMOptions {
     public static final HostedOptionKey<String> DumpLLVMStackMap = new HostedOptionKey<>(null);
 
     @Option(help = "Maximum size of batches used for LLVM compilation. 0 means a single batch, 1 means all functions separately", type = OptionType.Debug)//
-    public static final HostedOptionKey<Integer> LLVMMaxFunctionsPerBatch = new HostedOptionKey<>(1000);
+    //TODO Enabled for easier test
+    public static final HostedOptionKey<Integer> LLVMMaxFunctionsPerBatch = new HostedOptionKey<>(1);
 
     @Option(help = "Path to a custom ld binary for LLVM linking")//
     public static final HostedOptionKey<String> CustomLD = new HostedOptionKey<>("");

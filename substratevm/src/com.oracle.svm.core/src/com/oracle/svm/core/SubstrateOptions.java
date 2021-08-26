@@ -127,7 +127,8 @@ public class SubstrateOptions {
     private static ValueUpdateHandler debugInfoValueUpdateHandler = SubstrateOptions::defaultDebugInfoValueUpdateHandler;
 
     @Option(help = "Control native-image code optimizations: 0 - no optimizations, 1 - basic optimizations, 2 - aggressive optimizations.", type = OptionType.User)//
-    public static final HostedOptionKey<Integer> Optimize = new HostedOptionKey<Integer>(2) {
+    // TODO Currently best to disable optimizations. AOTInline and AOTTrivialInline needs to stay activated!
+    public static final HostedOptionKey<Integer> Optimize = new HostedOptionKey<Integer>(0) {
         @Override
         protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Integer oldValue, Integer newValue) {
             SubstrateOptions.IncludeNodeSourcePositions.update(values, newValue < 1);
@@ -152,7 +153,8 @@ public class SubstrateOptions {
     }
 
     @Option(help = "Track NodeSourcePositions during runtime-compilation")//
-    public static final HostedOptionKey<Boolean> IncludeNodeSourcePositions = new HostedOptionKey<>(false);
+    //TODO Enabled for easier test
+    public static final HostedOptionKey<Boolean> IncludeNodeSourcePositions = new HostedOptionKey<>(true);
 
     @Option(help = "Search path for C libraries passed to the linker (list of comma-separated directories)")//
     public static final HostedOptionKey<LocatableMultiOptionValue.Strings> CLibraryPath = new HostedOptionKey<>(new LocatableMultiOptionValue.Strings());
@@ -449,7 +451,8 @@ public class SubstrateOptions {
 
     @APIOption(name = "-g", fixedValue = "2", customHelp = "generate debugging information")//
     @Option(help = "Insert debug info into the generated native image or library")//
-    public static final HostedOptionKey<Integer> GenerateDebugInfo = new HostedOptionKey<Integer>(0) {
+    //TODO Enabled for easier test
+    public static final HostedOptionKey<Integer> GenerateDebugInfo = new HostedOptionKey<Integer>(1) {
         @Override
         protected void onValueUpdate(EconomicMap<OptionKey<?>, Object> values, Integer oldValue, Integer newValue) {
             debugInfoValueUpdateHandler.onValueUpdate(values, oldValue, newValue);
@@ -466,6 +469,7 @@ public class SubstrateOptions {
     }
 
     @Option(help = "Search path for source files for Application or GraalVM classes (list of comma-separated directories or jar files)")//
+    //TODO Needs to be set
     public static final HostedOptionKey<LocatableMultiOptionValue.Strings> DebugInfoSourceSearchPath = new HostedOptionKey<>(new LocatableMultiOptionValue.Strings());
 
     @Option(help = "Directory under which to create source file cache for Application or GraalVM classes")//
