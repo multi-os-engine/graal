@@ -63,15 +63,18 @@ public class LLVMDebugInfoBuilder {
         SourceManager sourceManager = ImageSingletons.lookup(SourceManager.class);
         path = sourceManager.findAndCacheSource(javaType, clazz, debugContext);
 
-
         diBuilder = LLVM.LLVMCreateDIBuilder(moduleRef);
+
          if (path == null) {
              //TODO could also happen when not defining -H:DebugInfoSourceSearchPath. Should be handled better
              //TODO This seems to be the case for Proxys
-             return;
+             // TODO At first just emit dummy files
+             file = LLVM.LLVMDIBuilderCreateFile(diBuilder, (String) null, 0, null, 0);
+             //return;
+         } else {
+             path = Paths.get(SubstrateOptions.DebugInfoSourceCacheRoot.getValue(), path.toString());
+             file = LLVM.LLVMDIBuilderCreateFile(diBuilder, path.getFileName().toString(), path.getFileName().toString().length(), path.getParent().toAbsolutePath().toString(), path.getParent().toAbsolutePath().toString().length());
          }
-        path = Paths.get(SubstrateOptions.DebugInfoSourceCacheRoot.getValue(), path.toString());
-        file = LLVM.LLVMDIBuilderCreateFile(diBuilder, path.getFileName().toString(), path.getFileName().toString().length(), path.getParent().toAbsolutePath().toString(), path.getParent().toAbsolutePath().toString().length());
 
         cu = LLVM.LLVMDIBuilderCreateCompileUnit(diBuilder,
                 LLVM.LLVMDWARFSourceLanguageJava,
@@ -95,10 +98,15 @@ public class LLVMDebugInfoBuilder {
         LLVM.LLVMAddModuleFlag(moduleRef, LLVM.LLVMModuleFlagBehaviorOverride, "Dwarf Version", "Dwarf Version".length(), LLVM.LLVMValueAsMetadata(LLVM.LLVMConstInt(LLVM.LLVMInt32TypeInContext(context), 4, 0)));
         LLVM.LLVMAddModuleFlag(moduleRef, LLVM.LLVMModuleFlagBehaviorOverride, "Debug Info Version", "Debug Info Version".length(), LLVM.LLVMValueAsMetadata(LLVM.LLVMConstInt(LLVM.LLVMInt32TypeInContext(context), 3, 0)));
         LLVMValueRef functionRef = LLVM.LLVMGetNamedFunction(moduleRef, SubstrateUtil.uniqueShortName(method));
-        if (method.getLineNumberTable() == null) {
+
+        // TODO: 15.11.2021 We need to also emit debug info for proxies, when no source code is available
+        int line = 0;
+        if (method.getLineNumberTable() != null) {
             //TODO What das this case mean?
-            return;
+            line = method.getLineNumberTable().getLineNumbers()[0];
+            //return;
         }
+
         /*LLVM.LLVMDIBuilderCreateParameterVariable(diBuilder,
                 cu,//TODO Correct scope?
                 );*/
@@ -111,7 +119,7 @@ public class LLVMDebugInfoBuilder {
                 SubstrateUtil.uniqueShortName(method),
                 SubstrateUtil.uniqueShortName(method).length(),
                 file,
-                method.getLineNumberTable().getLineNumbers()[0],
+                line,
                 subRoutineType,
                 1,
                 1,
@@ -123,6 +131,7 @@ public class LLVMDebugInfoBuilder {
 
     public void emitLocation(int line) {
         if (subprogram == null) {
+            //Currently wont happen
             //TODO When the lineNumberTable was empty
             return;
         }

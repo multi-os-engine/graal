@@ -299,8 +299,14 @@ public class NodeLLVMBuilder implements NodeLIRBuilderTool, SubstrateNodeLIRBuil
                         * */
                         llvmDebugInfoBuilder.emitLocation(line);
                     }else {
-                        //TODO When is this the
+                        //TODO When is this the case
+                        //TODO Temporarly to support inlining for proxies
+                        llvmDebugInfoBuilder.emitLocation(0);
                     }
+                }else {
+                    //TODO When is this the case
+                    //TODO Temporarly to support inlining for proxies
+                    llvmDebugInfoBuilder.emitLocation(0);
                 }
                 /*
                  * There can be cases in which the result of an instruction is already set before by
