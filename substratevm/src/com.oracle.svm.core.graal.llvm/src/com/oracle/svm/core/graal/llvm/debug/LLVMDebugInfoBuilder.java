@@ -106,10 +106,10 @@ public class LLVMDebugInfoBuilder {
         LLVMMetadataRef subRoutineType = LLVM.LLVMDIBuilderCreateSubroutineType(diBuilder, file, (LLVMMetadataRef) null, 0, 0);
         subprogram = LLVM.LLVMDIBuilderCreateFunction(diBuilder,
                 cu,
+                name(),// Maybe better a combination of Class name and method name better
+                name().length(),
                 SubstrateUtil.uniqueShortName(method),
                 SubstrateUtil.uniqueShortName(method).length(),
-                name(),
-                name().length(),
                 file,
                 method.getLineNumberTable().getLineNumbers()[0],
                 subRoutineType,
