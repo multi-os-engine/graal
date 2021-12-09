@@ -33,13 +33,13 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.spi.CoreProviders;
 
-import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.infrastructure.Universe;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.results.StrengthenGraphs;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.annotate.Uninterruptible;
-import com.oracle.svm.core.graal.nodes.DeadEndNode;
+import com.oracle.svm.core.graal.nodes.LoweredDeadEndNode;
 import com.oracle.svm.core.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.core.snippets.SnippetRuntime;
 import com.oracle.svm.hosted.meta.HostedType;
@@ -49,7 +49,7 @@ import jdk.vm.ci.meta.JavaTypeProfile;
 
 public class SubstrateStrengthenGraphs extends StrengthenGraphs {
 
-    public SubstrateStrengthenGraphs(BigBang bb, Universe converter) {
+    public SubstrateStrengthenGraphs(PointsToAnalysis bb, Universe converter) {
         super(bb, converter);
     }
 
@@ -67,7 +67,7 @@ public class SubstrateStrengthenGraphs extends StrengthenGraphs {
 
     @Override
     protected FixedNode createUnreachable(StructuredGraph graph, CoreProviders providers, Supplier<String> message) {
-        FixedNode unreachableNode = graph.add(new DeadEndNode());
+        FixedNode unreachableNode = graph.add(new LoweredDeadEndNode());
 
         /*
          * To aid debugging of static analysis problems, we can print details about why the place is

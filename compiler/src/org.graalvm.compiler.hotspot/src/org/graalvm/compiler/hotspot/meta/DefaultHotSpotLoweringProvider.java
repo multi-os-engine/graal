@@ -69,6 +69,7 @@ import org.graalvm.compiler.hotspot.nodes.HotSpotCompressionNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotDirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.HotSpotIndirectCallTargetNode;
 import org.graalvm.compiler.hotspot.nodes.KlassBeingInitializedCheckNode;
+import org.graalvm.compiler.hotspot.nodes.VMErrorNode;
 import org.graalvm.compiler.hotspot.nodes.aot.InitializeKlassNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveConstantNode;
 import org.graalvm.compiler.hotspot.nodes.aot.ResolveDynamicConstantNode;
@@ -106,10 +107,10 @@ import org.graalvm.compiler.hotspot.word.KlassPointer;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
-import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.DeadEndNode;
+import org.graalvm.compiler.nodes.DeoptimizeNode;
 import org.graalvm.compiler.nodes.FixedNode;
-import org.graalvm.compiler.nodes.GetObjectAddressNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoweredCallTargetNode;
@@ -121,7 +122,6 @@ import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
-import org.graalvm.compiler.nodes.calc.AddNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.calc.IntegerDivRemNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
@@ -173,7 +173,6 @@ import org.graalvm.compiler.nodes.spi.LoweringTool;
 import org.graalvm.compiler.nodes.spi.PlatformConfigurationProvider;
 import org.graalvm.compiler.nodes.spi.StampProvider;
 import org.graalvm.compiler.nodes.type.StampTool;
-import org.graalvm.compiler.nodes.util.GraphUtil;
 import org.graalvm.compiler.options.OptionValues;
 import org.graalvm.compiler.replacements.DefaultJavaLoweringProvider;
 import org.graalvm.compiler.replacements.IdentityHashCodeSnippets;
@@ -182,6 +181,7 @@ import org.graalvm.compiler.replacements.arraycopy.ArrayCopyNode;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopySnippets;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopyWithDelayedLoweringNode;
 import org.graalvm.compiler.replacements.nodes.AssertionNode;
+import org.graalvm.compiler.replacements.nodes.CStringConstant;
 import org.graalvm.compiler.replacements.nodes.LogNode;
 import org.graalvm.compiler.serviceprovider.GraalServices;
 import org.graalvm.compiler.serviceprovider.JavaVersionUtil;
@@ -192,6 +192,8 @@ import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.meta.DeoptimizationAction;
+import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -490,10 +492,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             lowerHubGetClassNode((HubGetClassNode) n, tool);
         } else if (n instanceof KlassLayoutHelperNode) {
             lowerKlassLayoutHelperNode((KlassLayoutHelperNode) n, tool);
-        } else if (n instanceof ComputeObjectAddressNode) {
-            if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
-                lowerComputeObjectAddressNode((ComputeObjectAddressNode) n);
-            }
         } else if (n instanceof ResolveDynamicConstantNode) {
             if (graph.getGuardsStage().areFrameStatesAtDeopts()) {
                 resolveConstantSnippets.lower((ResolveDynamicConstantNode) n, tool);
@@ -527,6 +525,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             }
         } else if (n instanceof RegisterFinalizerNode) {
             lowerRegisterFinalizer((RegisterFinalizerNode) n, tool);
+        } else if (n instanceof DeadEndNode) {
+            lowerDeadEnd((DeadEndNode) n);
         } else {
             return false;
         }
@@ -561,27 +561,6 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             monitor.setObject(objectNonNull);
             monitor.setObjectData(graph.addOrUnique(LoadHubNode.create(objectNonNull, tool.getStampProvider(), tool.getMetaAccess(), tool.getConstantReflection())));
         }
-    }
-
-    private static void lowerComputeObjectAddressNode(ComputeObjectAddressNode n) {
-        /*
-         * Lower the node into a ComputeObjectAddress node and an Add but ensure that it's below any
-         * potential safepoints and above it's uses.
-         */
-        for (Node use : n.usages().snapshot()) {
-            if (use instanceof FixedNode) {
-                FixedNode fixed = (FixedNode) use;
-                StructuredGraph graph = n.graph();
-                GetObjectAddressNode address = graph.add(new GetObjectAddressNode(n.getObject()));
-                graph.addBeforeFixed(fixed, address);
-                AddNode add = graph.addOrUnique(new AddNode(address, n.getOffset()));
-                use.replaceFirstInput(n, add);
-            } else {
-                throw GraalError.shouldNotReachHere("Unexpected floating use of ComputeObjectAddressNode " + n);
-            }
-        }
-        GraphUtil.unlinkFixedNode(n);
-        n.safeDelete();
     }
 
     private void lowerKlassLayoutHelperNode(KlassLayoutHelperNode n, LoweringTool tool) {
@@ -861,7 +840,11 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
             return;
         }
 
-        ForeignCallDescriptor descriptor = foreignCalls.getDescriptor(RuntimeCalls.runtimeCalls.get(node.getExceptionKind()));
+        ForeignCallSignature signature = RuntimeCalls.runtimeCalls.get(node.getExceptionKind());
+        if (signature == null) {
+            throw new GraalError("No runtime call available to lower BytecodeExceptionKind " + node.getExceptionKind());
+        }
+        ForeignCallDescriptor descriptor = foreignCalls.getDescriptor(signature);
         StructuredGraph graph = node.graph();
         List<ValueNode> arguments = node.getArguments();
 
@@ -893,6 +876,14 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         // Keep a proper stateAfter for use by FSA
         foreignCallNode.setStateAfter(node.stateAfter());
         graph.replaceFixedWithFixed(node, foreignCallNode);
+    }
+
+    protected void lowerDeadEnd(DeadEndNode deadEnd) {
+        StructuredGraph graph = deadEnd.graph();
+        VMErrorNode vmErrorNode = graph.add(new VMErrorNode(new CStringConstant("DeadEnd"), graph.unique(ConstantNode.forLong(0))));
+        DeoptimizeNode deopt = graph.add(new DeoptimizeNode(DeoptimizationAction.None, DeoptimizationReason.UnreachedCode));
+        vmErrorNode.setNext(deopt);
+        deadEnd.replaceAndDelete(vmErrorNode);
     }
 
     private ReadNode createReadVirtualMethod(StructuredGraph graph, ValueNode hub, HotSpotResolvedJavaMethod method, ResolvedJavaType receiverType) {

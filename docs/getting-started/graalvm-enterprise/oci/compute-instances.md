@@ -79,7 +79,7 @@ Now you have a ready-to-go VM instance with GraalVM Enterprise installed and rea
    ```
 
 2. Look up the necessary RPM package name and add it to GraalVM Enterprise with the `yum install <package_name> command` command.
-For example, to install [Native Image](https://docs.oracle.com/en/graalvm/enterprise/{{ site.version }}/docs/reference-manual/enterprise-native-image/), which is a technology to ahead-of-time compile Java code to a standalone native executable, run this command:
+For example, to install [Native Image](/reference-manual/native-image/), which is a technology to ahead-of-time compile Java code to a standalone native executable, run this command:
 
    ```shell
    sudo yum install graalvm21-ee-11-native-image
@@ -114,3 +114,8 @@ If you want to upgrade an existing version, and also remove the obsolete GraalVM
 sudo yum upgrade <package_name>
 ```
 The `yum upgrade` command will upgrade the whole system.
+
+## Learn More
+
+To test GraalVM Enterprise in OCI, we recommend running the [Accelerate Applications in Oracle Cloud with GraalVM Enterprise](https://luna.oracle.com/lab/d502417b-df66-45be-9fed-a3ac8e3f09b1/steps) interactive workshop.
+The purpose of this lab is to give you an overview of GraalVM Enterprise and its advantages. You will run demo projects to compare performance and see how GraalVM Enterprise can accelerate applications in OracIe Cloud.

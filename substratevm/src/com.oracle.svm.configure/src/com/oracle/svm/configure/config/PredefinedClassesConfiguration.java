@@ -30,6 +30,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.function.Predicate;
 
 import com.oracle.svm.configure.ConfigurationBase;
 import com.oracle.svm.configure.json.JsonWriter;
@@ -38,15 +40,20 @@ import com.oracle.svm.core.hub.PredefinedClassesSupport;
 
 public class PredefinedClassesConfiguration implements ConfigurationBase {
     private final Path[] classDestinationDirs;
-    private final ConcurrentHashMap<String, ConfigurationPredefinedClass> classes = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ConfigurationPredefinedClass> classes = new ConcurrentHashMap<>();
+    private final Predicate<String> shouldExcludeClassWithHash;
 
-    public PredefinedClassesConfiguration(Path[] classDestinationDirs) {
+    public PredefinedClassesConfiguration(Path[] classDestinationDirs, Predicate<String> shouldExcludeClassWithHash) {
         this.classDestinationDirs = classDestinationDirs;
+        this.shouldExcludeClassWithHash = shouldExcludeClassWithHash;
     }
 
     public void add(String nameInfo, byte[] classData) {
         ensureDestinationDirsExist();
         String hash = PredefinedClassesSupport.hash(classData, 0, classData.length);
+        if (shouldExcludeClassWithHash != null && shouldExcludeClassWithHash.test(hash)) {
+            return;
+        }
         if (classDestinationDirs != null) {
             for (Path dir : classDestinationDirs) {
                 try {
@@ -61,13 +68,22 @@ public class PredefinedClassesConfiguration implements ConfigurationBase {
     }
 
     public void add(String nameInfo, String hash, Path directory) {
+        if (shouldExcludeClassWithHash != null && shouldExcludeClassWithHash.test(hash)) {
+            return;
+        }
         if (classDestinationDirs != null) {
             ensureDestinationDirsExist();
-            for (Path dir : classDestinationDirs) {
-                if (!dir.equals(directory)) {
+            for (Path destDir : classDestinationDirs) {
+                if (!destDir.equals(directory)) {
                     try {
                         String fileName = getFileName(hash);
-                        Files.copy(directory.resolve(fileName), dir.resolve(fileName), StandardCopyOption.REPLACE_EXISTING);
+                        Path target = destDir.resolve(fileName);
+                        if (directory != null) {
+                            Files.copy(directory.resolve(fileName), target, StandardCopyOption.REPLACE_EXISTING);
+                        } else if (!Files.exists(target)) {
+                            throw new RuntimeException("Cannot copy class data file for predefined class " + nameInfo + " with hash " + hash + ": " +
+                                            "source directory is unknown and file does not already exist in target directory.");
+                        }
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
@@ -118,5 +134,13 @@ public class PredefinedClassesConfiguration implements ConfigurationBase {
     @Override
     public boolean isEmpty() {
         return classes.isEmpty();
+    }
+
+    public boolean containsClassWithName(String className) {
+        return classes.values().stream().anyMatch(clazz -> clazz.getNameInfo().equals(className));
+    }
+
+    public boolean containsClassWithHash(String hash) {
+        return classes.containsKey(hash);
     }
 }

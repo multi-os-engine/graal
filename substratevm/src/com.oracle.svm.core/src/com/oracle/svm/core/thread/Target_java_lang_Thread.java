@@ -49,8 +49,6 @@ import com.oracle.svm.core.jdk.LoomJDK;
 import com.oracle.svm.core.jdk.NotLoomJDK;
 import com.oracle.svm.core.jdk.UninterruptibleUtils.AtomicReference;
 import com.oracle.svm.core.monitor.MonitorSupport;
-import com.oracle.svm.core.option.XOptions;
-import com.oracle.svm.core.stack.StackOverflowCheck;
 import com.oracle.svm.core.util.VMError;
 
 @TargetClass(Thread.class)
@@ -346,30 +344,6 @@ public final class Target_java_lang_Thread {
             throw VMError.unsupportedFeature("Single-threaded VM cannot create new threads");
         }
 
-        /* Choose a stack size based on parameters, command line flags, and system restrictions. */
-        long chosenStackSize = SubstrateOptions.StackSize.getHostedValue();
-        long stackSize = JavaContinuations.LoomCompatibilityUtil.getStackSize(this);
-        if (stackSize != 0) {
-            /* If the user set a thread stack size at thread creation, then use that. */
-            chosenStackSize = stackSize;
-        } else {
-            /* If the user set a thread stack size on the command line, then use that. */
-            final int defaultThreadStackSize = (int) XOptions.getXss().getValue();
-            if (defaultThreadStackSize != 0L) {
-                chosenStackSize = defaultThreadStackSize;
-            }
-        }
-
-        if (chosenStackSize != 0) {
-            /*
-             * Add the yellow+red zone size: This area of the stack is not accessible to the user's
-             * Java code, so it would be surprising if we gave the user less stack space to use than
-             * explicitly requested. In particular, a size less than the yellow+red size would lead
-             * to an immediate StackOverflowError.
-             */
-            chosenStackSize += StackOverflowCheck.singleton().yellowAndRedZoneSize();
-        }
-
         /*
          * The threadStatus must be set to RUNNABLE by the parent thread and before the child thread
          * starts because we are creating child threads asynchronously (there is no coordination
@@ -380,7 +354,8 @@ public final class Target_java_lang_Thread {
          */
         JavaContinuations.LoomCompatibilityUtil.setThreadStatus(this, ThreadStatus.RUNNABLE);
         wasStartedByCurrentIsolate = true;
-        JavaThreads.singleton().startThread(JavaThreads.fromTarget(this), chosenStackSize);
+        long stackSize = JavaThreads.getRequestedThreadSize(JavaThreads.fromTarget(this));
+        JavaThreads.singleton().startThread(JavaThreads.fromTarget(this), stackSize);
     }
 
     @Substitute

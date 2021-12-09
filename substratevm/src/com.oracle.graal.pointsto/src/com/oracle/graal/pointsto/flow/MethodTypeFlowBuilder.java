@@ -95,13 +95,13 @@ import org.graalvm.compiler.phases.graph.MergeableState;
 import org.graalvm.compiler.phases.graph.PostOrderNodeIterator;
 import org.graalvm.compiler.replacements.arraycopy.ArrayCopy;
 import org.graalvm.compiler.replacements.nodes.BinaryMathIntrinsicNode;
-import org.graalvm.compiler.replacements.nodes.MacroNode;
+import org.graalvm.compiler.replacements.nodes.MacroInvokable;
 import org.graalvm.compiler.replacements.nodes.ObjectClone;
 import org.graalvm.compiler.replacements.nodes.UnaryMathIntrinsicNode;
 import org.graalvm.compiler.word.WordCastNode;
 import org.graalvm.util.GuardedAnnotationAccess;
 
-import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.flow.LoadFieldTypeFlow.LoadInstanceFieldTypeFlow;
 import com.oracle.graal.pointsto.flow.LoadFieldTypeFlow.LoadStaticFieldTypeFlow;
 import com.oracle.graal.pointsto.flow.OffsetLoadTypeFlow.AtomicReadTypeFlow;
@@ -134,7 +134,7 @@ import jdk.vm.ci.meta.JavaKind;
 
 public class MethodTypeFlowBuilder {
 
-    protected final BigBang bb;
+    protected final PointsToAnalysis bb;
     protected final MethodTypeFlow methodFlow;
     protected final AnalysisMethod method;
     protected StructuredGraph graph;
@@ -143,14 +143,14 @@ public class MethodTypeFlowBuilder {
 
     protected final TypeFlowGraphBuilder typeFlowGraphBuilder;
 
-    public MethodTypeFlowBuilder(BigBang bb, MethodTypeFlow methodFlow) {
+    public MethodTypeFlowBuilder(PointsToAnalysis bb, MethodTypeFlow methodFlow) {
         this.bb = bb;
         this.methodFlow = methodFlow;
         this.method = methodFlow.getMethod();
         typeFlowGraphBuilder = new TypeFlowGraphBuilder(bb);
     }
 
-    public MethodTypeFlowBuilder(BigBang bb, StructuredGraph graph) {
+    public MethodTypeFlowBuilder(PointsToAnalysis bb, StructuredGraph graph) {
         this.bb = bb;
         this.graph = graph;
         this.method = (AnalysisMethod) graph.method();
@@ -288,7 +288,7 @@ public class MethodTypeFlowBuilder {
         }
     }
 
-    private static void registerForeignCall(BigBang bb, ForeignCallDescriptor foreignCallDescriptor) {
+    private static void registerForeignCall(PointsToAnalysis bb, ForeignCallDescriptor foreignCallDescriptor) {
         Optional<AnalysisMethod> targetMethod = bb.getHostVM().handleForeignCall(foreignCallDescriptor, bb.getProviders().getForeignCalls());
         targetMethod.ifPresent(analysisMethod -> {
             bb.addRootMethod(analysisMethod);
@@ -1212,7 +1212,7 @@ public class MethodTypeFlowBuilder {
                 monitorEntryBuilder.addUseDependency(objectBuilder);
                 /* Monitor enters must not be removed. */
                 typeFlowGraphBuilder.registerSinkBuilder(monitorEntryBuilder);
-            } else if (n instanceof MacroNode) {
+            } else if (n instanceof MacroInvokable) {
                 /*
                  * Macro nodes can either be constant folded during compilation, or lowered back to
                  * invocations if constant folding is not possible. So the static analysis needs to
@@ -1221,8 +1221,8 @@ public class MethodTypeFlowBuilder {
                  * Note that some macro nodes, like for object cloning, are handled separately
                  * above.
                  */
-                MacroNode node = (MacroNode) n;
-                processMethodInvocation(node, node.getInvokeKind(), node.bci(), (AnalysisMethod) node.getTargetMethod(), node.getArguments());
+                MacroInvokable node = (MacroInvokable) n;
+                processMethodInvocation(n, node.getInvokeKind(), node.bci(), (AnalysisMethod) node.getTargetMethod(), node.getArguments());
 
             } else {
                 delegateNodeProcessing(n, state);
@@ -1324,13 +1324,13 @@ public class MethodTypeFlowBuilder {
                 /* Create the actual return builder. */
                 AnalysisType returnType = (AnalysisType) targetMethod.getSignature().getReturnType(null);
                 TypeFlowBuilder<?> actualReturnBuilder = TypeFlowBuilder.create(bb, invoke.asNode(), ActualReturnTypeFlow.class, () -> {
-                    ActualReturnTypeFlow actualReturn = new ActualReturnTypeFlow(invoke.asNode(), returnType);
+                    InvokeTypeFlow invokeFlow = invokeBuilder.get();
+                    ActualReturnTypeFlow actualReturn = new ActualReturnTypeFlow(invokeFlow.source, returnType);
                     methodFlow.addMiscEntry(actualReturn);
                     /*
                      * Only set the actual return in the invoke when it is materialized, i.e., it is
                      * used by other flows.
                      */
-                    InvokeTypeFlow invokeFlow = invokeBuilder.get();
                     invokeFlow.setActualReturn(actualReturn);
                     actualReturn.setInvokeFlow(invokeFlow);
                     return actualReturn;

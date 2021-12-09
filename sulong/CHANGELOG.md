@@ -1,3 +1,14 @@
+# Version 21.3.0
+
+Changes:
+
+* Updated LLVM toolchain to version 12.0.0.
+
+Removals:
+
+* Removed ReferenceLibrary (deprecated since version 20.2).
+  Implement InteropLibrary.isIdenticalOrUndefined instead.
+
 # Version 21.2.0
 
 Fixes:
@@ -20,6 +31,8 @@ New features:
 * System calls that return pointers are now supported.
 
 * Support passing pointers as operands to inline assembly instructions.
+
+* Support C++ virtual calls via interop.
 
 # Version 21.1.0
 

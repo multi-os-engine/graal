@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -40,18 +41,20 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+
+import org.graalvm.nativeimage.ImageInfo;
 
 import com.oracle.svm.configure.config.ConfigurationSet;
 import com.oracle.svm.configure.filters.FilterConfigurationParser;
-import com.oracle.svm.configure.filters.ModuleFilterTools;
 import com.oracle.svm.configure.filters.RuleNode;
 import com.oracle.svm.configure.json.JsonWriter;
 import com.oracle.svm.configure.trace.AccessAdvisor;
 import com.oracle.svm.configure.trace.TraceProcessor;
-import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.configure.ConfigurationFile;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.util.ReflectionUtil;
 
 public class ConfigurationTool {
 
@@ -144,6 +147,7 @@ public class ConfigurationTool {
         boolean builtinHeuristicFilter = true;
         List<Path> callerFilterFiles = new ArrayList<>();
 
+        ConfigurationSet omittedInputSet = new ConfigurationSet();
         ConfigurationSet inputSet = new ConfigurationSet();
         ConfigurationSet outputSet = new ConfigurationSet();
         while (argsIter.hasNext()) {
@@ -163,6 +167,10 @@ public class ConfigurationTool {
                         throw new NoSuchFileException(value);
                     }
                     outputSet.addDirectory(directory);
+                    break;
+
+                case "--omit-from-input-dir":
+                    omittedInputSet.addDirectory(requirePath(current, value));
                     break;
 
                 case "--reflect-input":
@@ -259,15 +267,23 @@ public class ConfigurationTool {
             advisor.setCallerFilterTree(callersFilter);
         }
         TraceProcessor p;
+        TraceProcessor omittedInputTraceProcessor;
         try {
+            omittedInputTraceProcessor = new TraceProcessor(advisor, omittedInputSet.loadJniConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
+                            omittedInputSet.loadReflectConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
+                            omittedInputSet.loadProxyConfig(ConfigurationSet.FAIL_ON_EXCEPTION), omittedInputSet.loadResourceConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
+                            omittedInputSet.loadSerializationConfig(ConfigurationSet.FAIL_ON_EXCEPTION), omittedInputSet.loadPredefinedClassesConfig(null, null, ConfigurationSet.FAIL_ON_EXCEPTION),
+                            null);
             List<Path> predefinedClassDestDirs = new ArrayList<>();
             for (URI pathUri : outputSet.getPredefinedClassesConfigPaths()) {
                 predefinedClassDestDirs.add(Paths.get(pathUri).getParent().resolve(ConfigurationFile.PREDEFINED_CLASSES_AGENT_EXTRACTED_SUBDIR));
             }
+            Predicate<String> shouldExcludeClassesWithHash = omittedInputTraceProcessor.getPredefinedClassesConfiguration()::containsClassWithHash;
             p = new TraceProcessor(advisor, inputSet.loadJniConfig(ConfigurationSet.FAIL_ON_EXCEPTION), inputSet.loadReflectConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
                             inputSet.loadProxyConfig(ConfigurationSet.FAIL_ON_EXCEPTION), inputSet.loadResourceConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
                             inputSet.loadSerializationConfig(ConfigurationSet.FAIL_ON_EXCEPTION),
-                            inputSet.loadPredefinedClassesConfig(predefinedClassDestDirs.toArray(new Path[0]), ConfigurationSet.FAIL_ON_EXCEPTION));
+                            inputSet.loadPredefinedClassesConfig(predefinedClassDestDirs.toArray(new Path[0]), shouldExcludeClassesWithHash, ConfigurationSet.FAIL_ON_EXCEPTION),
+                            omittedInputTraceProcessor);
         } catch (IOException e) {
             throw e;
         } catch (Throwable t) {
@@ -339,7 +355,7 @@ public class ConfigurationTool {
                 case "--include-packages-from-modules":
                 case "--exclude-packages-from-modules":
                 case "--exclude-unexported-packages-from-modules":
-                    if (SubstrateUtil.HOSTED) {
+                    if (!ImageInfo.inImageCode()) {
                         if (rootNode != null) {
                             throw new UsageException(current + " must be specified before other rule-creating arguments");
                         }
@@ -352,7 +368,17 @@ public class ConfigurationTool {
                             exportedInclusion = RuleNode.Inclusion.Include;
                             unexportedInclusion = RuleNode.Inclusion.Exclude;
                         }
-                        rootNode = ModuleFilterTools.generateFromModules(moduleNames, rootInclusion, exportedInclusion, unexportedInclusion, reduce);
+
+                        try {
+                            Class<?> moduleFilterToolsClass = Class.forName("com.oracle.svm.configure.jdk11.filters.ModuleFilterTools");
+                            Method generateFromModulesMethod = ReflectionUtil.lookupMethod(moduleFilterToolsClass, "generateFromModules",
+                                            String[].class, RuleNode.Inclusion.class, RuleNode.Inclusion.class, RuleNode.Inclusion.class, boolean.class);
+                            rootNode = (RuleNode) generateFromModulesMethod.invoke(null, moduleNames, rootInclusion, exportedInclusion, unexportedInclusion, reduce);
+                        } catch (ClassNotFoundException e) {
+                            throw new RuntimeException("Module-based filter generation is not available in JDK 8 and below.");
+                        } catch (ReflectiveOperationException e) {
+                            throw new RuntimeException(e);
+                        }
                     } else {
                         throw new UsageException(current + " is currently not supported in the native-image build of this tool.");
                     }

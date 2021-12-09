@@ -134,19 +134,6 @@ public final class DebuggerConnection implements Commands {
     }
 
     @Override
-    public Callable<Void> createMethodEntryBreakpointCommand(BreakpointInfo info) {
-        return new Callable<Void>() {
-            @Override
-            public Void call() {
-                DebuggerCommand debuggerCommand = new DebuggerCommand(DebuggerCommand.Kind.SUBMIT_METHOD_ENTRY_BREAKPOINT, info.getFilter());
-                debuggerCommand.setBreakpointInfo(info);
-                addBlocking(debuggerCommand);
-                return null;
-            }
-        };
-    }
-
-    @Override
     public Callable<Void> createExceptionBreakpoint(BreakpointInfo info) {
         return new Callable<Void>() {
             @Override
@@ -170,9 +157,6 @@ public final class DebuggerConnection implements Commands {
                     switch (debuggerCommand.kind) {
                         case SUBMIT_LINE_BREAKPOINT:
                             controller.submitLineBreakpoint(debuggerCommand);
-                            break;
-                        case SUBMIT_METHOD_ENTRY_BREAKPOINT:
-                            controller.submitMethodEntryBreakpoint(debuggerCommand);
                             break;
                         case SUBMIT_EXCEPTION_BREAKPOINT:
                             controller.submitExceptionBreakpoint(debuggerCommand);
@@ -302,6 +286,9 @@ public final class DebuggerConnection implements Commands {
                                 case JDWP.VirtualMachine.INSTANCE_COUNTS.ID:
                                     result = JDWP.VirtualMachine.INSTANCE_COUNTS.createReply(packet);
                                     break;
+                                case JDWP.VirtualMachine.ALL_MODULES.ID:
+                                    result = JDWP.VirtualMachine.ALL_MODULES.createReply(packet, context);
+                                    break;
                                 default:
                                     break;
                             }
@@ -362,6 +349,9 @@ public final class DebuggerConnection implements Commands {
                                     break;
                                 case JDWP.ReferenceType.CONSTANT_POOL.ID:
                                     result = JDWP.ReferenceType.CONSTANT_POOL.createReply(packet, context);
+                                    break;
+                                case JDWP.ReferenceType.MODULE.ID:
+                                    result = JDWP.ReferenceType.MODULE.createReply(packet, context);
                                     break;
                             }
                             break;
@@ -486,7 +476,7 @@ public final class DebuggerConnection implements Commands {
                                     result = JDWP.ThreadReference.OWNED_MONITORS.createReply(packet, controller);
                                     break;
                                 case JDWP.ThreadReference.CURRENT_CONTENDED_MONITOR.ID:
-                                    result = JDWP.ThreadReference.CURRENT_CONTENDED_MONITOR.createReply(packet, context);
+                                    result = JDWP.ThreadReference.CURRENT_CONTENDED_MONITOR.createReply(packet, controller);
                                     break;
                                 case JDWP.ThreadReference.STOP.ID:
                                     result = JDWP.ThreadReference.STOP.createReply(packet, context);
@@ -581,6 +571,19 @@ public final class DebuggerConnection implements Commands {
                             switch (packet.cmd) {
                                 case JDWP.ClassObjectReference.REFLECTED_TYPE.ID:
                                     result = JDWP.ClassObjectReference.REFLECTED_TYPE.createReply(packet, context);
+                                    break;
+                                default:
+                                    break;
+                            }
+                            break;
+                        }
+                        case JDWP.ModuleReference.ID: {
+                            switch (packet.cmd) {
+                                case JDWP.ModuleReference.NAME.ID:
+                                    result = JDWP.ModuleReference.NAME.createReply(packet, context);
+                                    break;
+                                case JDWP.ModuleReference.CLASSLOADER.ID:
+                                    result = JDWP.ModuleReference.CLASSLOADER.createReply(packet, context);
                                     break;
                                 default:
                                     break;

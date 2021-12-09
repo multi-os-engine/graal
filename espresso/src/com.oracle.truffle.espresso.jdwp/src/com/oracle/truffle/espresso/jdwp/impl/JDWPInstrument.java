@@ -32,9 +32,10 @@ import java.util.concurrent.Callable;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.instrumentation.TruffleInstrument;
+import com.oracle.truffle.api.instrumentation.TruffleInstrument.Registration;
 import com.oracle.truffle.espresso.jdwp.api.JDWPContext;
 
-@TruffleInstrument.Registration(id = JDWPInstrument.ID, name = "Java debug wire protocol", services = DebuggerController.class)
+@Registration(id = JDWPInstrument.ID, name = "Java debug wire protocol", services = DebuggerController.class)
 public final class JDWPInstrument extends TruffleInstrument implements Runnable {
 
     public static final String ID = "jdwp";
@@ -57,11 +58,6 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
     }
 
     public void reset(boolean prepareForReconnect) {
-        // close the connection to the debugger
-        if (connection != null) {
-            connection.close();
-        }
-
         // stop all running jdwp threads in an orderly fashion
         for (Thread activeThread : activeThreads) {
             activeThread.interrupt();
@@ -91,6 +87,11 @@ public final class JDWPInstrument extends TruffleInstrument implements Runnable 
 
         // resume all threads
         controller.resumeAll(true);
+
+        // close the connection to the debugger
+        if (connection != null) {
+            connection.close();
+        }
 
         if (prepareForReconnect) {
             // replace the controller instance

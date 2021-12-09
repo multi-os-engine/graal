@@ -1,7 +1,7 @@
 suite = {
     "name": "vm",
-    "version" : "21.2.0.1",
-    "mxversion" : "5.301.0",
+    "version" : "21.3.0",
+    "mxversion" : "5.309.2",
     "release" : True,
     "groupId" : "org.graalvm",
 
@@ -39,7 +39,7 @@ suite = {
                 "name": "graal-nodejs",
                 "subdir": True,
                 "dynamic": True,
-                "version": "64b33bab61e5e4132b6036838833341e12e6b6cd",
+                "version": "ede7e2b88260ac8b1ec0d856f0263e56cb4dfed2",
                 "urls" : [
                     {"url" : "https://github.com/graalvm/graaljs.git", "kind" : "git"},
                     {"url": "https://curio.ssw.jku.at/nexus/content/repositories/snapshots", "kind": "binary"},
@@ -49,7 +49,7 @@ suite = {
                 "name": "graal-js",
                 "subdir": True,
                 "dynamic": True,
-                "version": "64b33bab61e5e4132b6036838833341e12e6b6cd",
+                "version": "ede7e2b88260ac8b1ec0d856f0263e56cb4dfed2",
                 "urls": [
                     {"url": "https://github.com/graalvm/graaljs.git", "kind" : "git"},
                     {"url": "https://curio.ssw.jku.at/nexus/content/repositories/snapshots", "kind": "binary"},
@@ -57,7 +57,7 @@ suite = {
             },
             {
                 "name": "truffleruby",
-                "version": "41c9843bdbb4d4d97ed953c821b3fc3f33e282d5",
+                "version": "3cb06d24147d0a1c8b00eec8237c926f1791e9b1",
                 "dynamic": True,
                 "urls": [
                     {"url": "https://github.com/oracle/truffleruby.git", "kind": "git"},
@@ -66,7 +66,7 @@ suite = {
             },
             {
                 "name": "fastr",
-                "version": "8e83c0396c9a1219f665a53d669b09d846440ae6",
+                "version": "8cacad3aecb277edac12ad7a6f6d2cc5a975a550",
                 "dynamic": True,
                 "urls": [
                     {"url": "https://github.com/oracle/fastr.git", "kind": "git"},
@@ -75,7 +75,7 @@ suite = {
             },
             {
                 "name": "graalpython",
-                "version": "a7bf05ce4381f14effadf3b0d276094a2126ffb7",
+                "version": "18f3960c365716b032881d0be03fc3303d6be682",
                 "dynamic": True,
                 "urls": [
                     {"url": "https://github.com/graalvm/graalpython.git", "kind": "git"},
@@ -118,6 +118,41 @@ suite = {
                 "sdk:LAUNCHER_COMMON",
             ],
         },
+        "org.graalvm.polybench.micro" : {
+            "subDir" : "src",
+            "sourceDirs" : ["src"],
+            "javaCompliance" : "1.8+",
+            "license" : "GPLv2-CPE",
+            "checkstyle": "org.graalvm.component.installer",
+            "dependencies": [
+                "truffle:TRUFFLE_API",
+            ],
+            "annotationProcessors": [
+                "truffle:TRUFFLE_DSL_PROCESSOR",
+            ],
+        },
+        "nfi-native" : {
+            "subDir" : "benchmarks",
+            "native" : "shared_lib",
+            "deliverable" : "microbench",
+            "buildDependencies" : [
+                "truffle:TRUFFLE_NFI_GRAALVM_SUPPORT",
+            ],
+            "cflags" : [
+                "-I<path:truffle:TRUFFLE_NFI_GRAALVM_SUPPORT>/include",
+            ],
+            "testProject" : True,
+            "defaultBuild": False,
+        },
+    },
+
+    "libraries" : {
+        # Note: small warmup benchmarks can be placed directly under `graal/vm/benchmarks/warmup`
+        # and uncomment the corresponding line for the `layout` of `POLYBENCH_BENCHMARKS` in current suite.
+        "WARMUP_BENCHMARKS" : {
+            "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/polybench/warmup-benchmarks-0.1.tar.gz"],
+            "sha1" : "4e4a81c096ecc4ba7c4de9ab8ca5180e93c85e60"
+        }
     },
 
     "distributions": {
@@ -177,6 +212,23 @@ suite = {
             ],
             "maven" : False,
         },
+        "PMH": {
+            "subDir": "src",
+            "dependencies": [
+                "org.graalvm.polybench.micro",
+            ],
+            "distDependencies": [
+                "truffle:TRUFFLE_API",
+            ],
+            "maven" : False,
+        },
+        "PMH_SUPPORT": {
+            "native": True,
+            "layout": {
+                "native-image.properties": "file:mx.vm/language-pmh.properties",
+            },
+            "maven": False,
+        },
         "POLYBENCH_BENCHMARKS": {
             "native": True,
             "description": "Distribution for polybench benchmarks",
@@ -194,6 +246,18 @@ suite = {
                 ],
                 "./compiler/": [
                     "file:benchmarks/compiler/*",
+                ],
+                "./warmup/": [
+                    # "file:benchmarks/warmup/*.js",
+                    # "file:benchmarks/warmup/*.rb",
+                    # "file:benchmarks/warmup/*.py",
+                    "extracted-dependency:WARMUP_BENCHMARKS/*"
+                ],
+                "./nfi/": [
+                    "file:benchmarks/nfi/*.pmh",
+                ],
+                "./nfi-native/": [
+                    "dependency:nfi-native",
                 ],
             },
             "defaultBuild": False,

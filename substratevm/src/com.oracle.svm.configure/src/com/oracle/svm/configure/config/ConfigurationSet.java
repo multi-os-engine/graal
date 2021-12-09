@@ -25,14 +25,17 @@
 package com.oracle.svm.configure.config;
 
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.net.URI;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import com.oracle.svm.core.configure.ConfigurationFile;
 import com.oracle.svm.core.configure.ConfigurationParser;
@@ -59,6 +62,15 @@ public class ConfigurationSet {
         resourceConfigPaths.add(path.resolve(ConfigurationFile.RESOURCES.getFileName()).toUri());
         serializationConfigPaths.add(path.resolve(ConfigurationFile.SERIALIZATION.getFileName()).toUri());
         predefinedClassesConfigPaths.add(path.resolve(ConfigurationFile.PREDEFINED_CLASSES_NAME.getFileName()).toUri());
+    }
+
+    public void addDirectory(Function<String, URI> fileResolver) {
+        jniConfigPaths.add(fileResolver.apply(ConfigurationFile.JNI.getFileName()));
+        reflectConfigPaths.add(fileResolver.apply(ConfigurationFile.REFLECTION.getFileName()));
+        proxyConfigPaths.add(fileResolver.apply(ConfigurationFile.DYNAMIC_PROXY.getFileName()));
+        resourceConfigPaths.add(fileResolver.apply(ConfigurationFile.RESOURCES.getFileName()));
+        serializationConfigPaths.add(fileResolver.apply(ConfigurationFile.SERIALIZATION.getFileName()));
+        predefinedClassesConfigPaths.add(fileResolver.apply(ConfigurationFile.PREDEFINED_CLASSES_NAME.getFileName()));
     }
 
     public boolean isEmpty() {
@@ -100,25 +112,26 @@ public class ConfigurationSet {
 
     public ProxyConfiguration loadProxyConfig(Function<IOException, Exception> exceptionHandler) throws Exception {
         ProxyConfiguration proxyConfiguration = new ProxyConfiguration();
-        loadConfig(proxyConfigPaths, new ProxyConfigurationParser(types -> proxyConfiguration.add(Arrays.asList(types))), exceptionHandler);
+        loadConfig(proxyConfigPaths, new ProxyConfigurationParser(types -> proxyConfiguration.add(types.getCondition(), new ArrayList<>(types.getElement())), true), exceptionHandler);
         return proxyConfiguration;
     }
 
-    public PredefinedClassesConfiguration loadPredefinedClassesConfig(Path[] classDestinationDirs, Function<IOException, Exception> exceptionHandler) throws Exception {
-        PredefinedClassesConfiguration predefinedClassesConfiguration = new PredefinedClassesConfiguration(classDestinationDirs);
-        loadConfig(predefinedClassesConfigPaths, new PredefinedClassesConfigurationParser(predefinedClassesConfiguration::add), exceptionHandler);
+    public PredefinedClassesConfiguration loadPredefinedClassesConfig(Path[] classDestinationDirs, Predicate<String> shouldExcludeClassesWithHash,
+                    Function<IOException, Exception> exceptionHandler) throws Exception {
+        PredefinedClassesConfiguration predefinedClassesConfiguration = new PredefinedClassesConfiguration(classDestinationDirs, shouldExcludeClassesWithHash);
+        loadConfig(predefinedClassesConfigPaths, new PredefinedClassesConfigurationParser(predefinedClassesConfiguration::add, true), exceptionHandler);
         return predefinedClassesConfiguration;
     }
 
     public ResourceConfiguration loadResourceConfig(Function<IOException, Exception> exceptionHandler) throws Exception {
         ResourceConfiguration resourceConfiguration = new ResourceConfiguration();
-        loadConfig(resourceConfigPaths, new ResourceConfigurationParser(new ResourceConfiguration.ParserAdapter(resourceConfiguration)), exceptionHandler);
+        loadConfig(resourceConfigPaths, new ResourceConfigurationParser(new ResourceConfiguration.ParserAdapter(resourceConfiguration), true), exceptionHandler);
         return resourceConfiguration;
     }
 
     public SerializationConfiguration loadSerializationConfig(Function<IOException, Exception> exceptionHandler) throws Exception {
         SerializationConfiguration serializationConfiguration = new SerializationConfiguration();
-        loadConfig(serializationConfigPaths, new SerializationConfigurationParser(serializationConfiguration::add), exceptionHandler);
+        loadConfig(serializationConfigPaths, new SerializationConfigurationParser(serializationConfiguration, true), exceptionHandler);
         return serializationConfiguration;
     }
 
@@ -130,9 +143,16 @@ public class ConfigurationSet {
 
     private static void loadConfig(Collection<URI> configPaths, ConfigurationParser configurationParser, Function<IOException, Exception> exceptionHandler) throws Exception {
         for (URI uri : configPaths) {
-            Path path = Paths.get(uri);
+            Path path = tryGetPath(uri);
             try {
-                configurationParser.parseAndRegister(path);
+                if (path != null) {
+                    // The path can be needed to find extra files, such as predefined class data
+                    configurationParser.parseAndRegister(path);
+                } else {
+                    try (Reader reader = new InputStreamReader(uri.toURL().openStream())) {
+                        configurationParser.parseAndRegister(reader);
+                    }
+                }
             } catch (IOException ioe) {
                 Exception e = ioe;
                 if (exceptionHandler != null) {
@@ -142,6 +162,14 @@ public class ConfigurationSet {
                     throw e;
                 }
             }
+        }
+    }
+
+    private static Path tryGetPath(URI uri) {
+        try {
+            return Paths.get(uri);
+        } catch (Exception e) {
+            return null;
         }
     }
 }

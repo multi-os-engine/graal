@@ -251,7 +251,7 @@ public interface JDWPContext {
 
     /**
      * Verifies that the array has the expected length.
-     * 
+     *
      * @param array guest language array object
      * @param length expected length of the array
      * @return true if array is equal to or bigger in size than the expected length
@@ -443,15 +443,6 @@ public interface JDWPContext {
     MonitorStackInfo[] getOwnedMonitors(CallFrame[] callFrames);
 
     /**
-     * Returns the current contended monitor for the guest thread, or <code>null</code> if there are
-     * no current contended monitor for this thread.
-     *
-     * @param guestThread the guest thread
-     * @return the current contended monitor
-     */
-    Object getCurrentContendedMonitor(Object guestThread);
-
-    /**
      * Returns the language class associated with the implementing class of this interface.
      *
      * @return the Truffle language class
@@ -470,7 +461,7 @@ public interface JDWPContext {
 
     /**
      * Exit all monitors that was entered by the frame.
-     * 
+     *
      * @param frame
      */
     void clearFrameMonitors(CallFrame frame);
@@ -497,4 +488,29 @@ public interface JDWPContext {
      * @return the current bci
      */
     long getBCI(Node rawNode, Frame frame);
+
+    /**
+     * Returns the instrumentable delegate node for the language root node or <code>rootNode</code>
+     * if no instrumentable node can be found.
+     *
+     * @param rootNode the root node
+     * @return the instrumentable delegate node
+     */
+    Node getInstrumentableNode(RootNode rootNode);
+
+    /**
+     * Tests if the guest object is a member of the klass.
+     *
+     * @param guestObject the guest object
+     * @param klass the class
+     * @return true is guest object is a member of the klass
+     */
+    boolean isMemberOf(Object guestObject, KlassRef klass);
+
+    /**
+     * Returns all defined modules.
+     *
+     * @return all modules
+     */
+    ModuleRef[] getAllModulesRefs();
 }

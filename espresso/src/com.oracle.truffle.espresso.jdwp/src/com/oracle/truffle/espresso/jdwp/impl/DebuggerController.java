@@ -61,6 +61,7 @@ import com.oracle.truffle.espresso.jdwp.api.JDWPOptions;
 import com.oracle.truffle.espresso.jdwp.api.KlassRef;
 import com.oracle.truffle.espresso.jdwp.api.MethodRef;
 import com.oracle.truffle.espresso.jdwp.api.MonitorStackInfo;
+import com.oracle.truffle.espresso.jdwp.api.VMEventListener;
 
 public final class DebuggerController implements ContextsListener {
 
@@ -98,12 +99,12 @@ public final class DebuggerController implements ContextsListener {
         this.eventFilters = new EventFilters();
     }
 
-    public void initialize(Debugger debug, JDWPOptions jdwpOptions, JDWPContext jdwpContext, Object thread) {
+    public void initialize(Debugger debug, JDWPOptions jdwpOptions, JDWPContext jdwpContext, Object thread, VMEventListener vmEventListener) {
         this.debugger = debug;
         this.options = jdwpOptions;
         this.context = jdwpContext;
         this.ids = jdwpContext.getIds();
-        this.eventListener = new VMEventListenerImpl(this, thread);
+        this.eventListener = vmEventListener;
         this.initialThread = thread;
 
         // setup the debug session object early to make sure instrumentable nodes are materialized
@@ -114,7 +115,7 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void reInitialize() {
-        initialize(debugger, options, context, initialThread);
+        initialize(debugger, options, context, initialThread, eventListener);
     }
 
     public JDWPContext getContext() {
@@ -321,7 +322,6 @@ public final class DebuggerController implements ContextsListener {
                                     break;
                                 case SUBMIT_EXCEPTION_BREAKPOINT:
                                 case SUBMIT_LINE_BREAKPOINT:
-                                case SUBMIT_METHOD_ENTRY_BREAKPOINT:
                                 case SPECIAL_STEP:
                                     break;
                                 default:
@@ -464,13 +464,20 @@ public final class DebuggerController implements ContextsListener {
     }
 
     public void disposeDebugger(boolean prepareReconnect) {
+        if (!prepareReconnect) {
+            // OK, we're closing down the context which is equivalent
+            // to a dead VM from a JDWP client point of view
+            if (eventListener.vmDied()) {
+                // we're asked to suspend
+                suspend(null, context.asGuestThread(Thread.currentThread()), SuspendStrategy.EVENT_THREAD, Collections.emptyList(), null, false);
+            }
+        }
         // Creating a new thread, because the reset method
         // will interrupt all active jdwp threads, which might
         // include the current one if we received a DISPOSE command.
         new Thread(new Runnable() {
             @Override
             public void run() {
-                eventListener.vmDied();
                 instrument.reset(prepareReconnect);
             }
         }).start();
@@ -719,6 +726,9 @@ public final class DebuggerController implements ContextsListener {
                     if (callTarget instanceof RootCallTarget) {
                         currentNode = ((RootCallTarget) callTarget).getRootNode();
                     }
+                }
+                if (currentNode instanceof RootNode) {
+                    currentNode = context.getInstrumentableNode((RootNode) currentNode);
                 }
                 callFrames.add(new CallFrame(context.getIds().getIdAsLong(guestThread), typeTag, klassId, method, methodId, codeIndex, frame, currentNode, root, null, context));
                 return null;

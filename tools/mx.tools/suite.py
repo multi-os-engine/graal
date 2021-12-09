@@ -26,7 +26,7 @@ suite = {
     "defaultLicense" : "GPLv2-CPE",
 
     "groupId" : "org.graalvm.tools",
-    "version" : "21.2.0.1",
+    "version" : "21.3.0",
     "release" : True,
     "url" : "http://openjdk.java.net/projects/graal",
     "developer" : {
@@ -315,31 +315,31 @@ suite = {
           "sourceSha1" : "298db2b3c573f9e76a5a7a60a49c7ceb5ddd35f7",
         },
         "VISUALVM_COMMON" : {
-            "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.2-7.tar.gz"],
-            "sha1" : "92adf96c130efc9d1e525699c23846b0184bbdb9",
+            "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.3-1.tar.gz"],
+            "sha1" : "9511556be701941de96e235129bbde5e22afd403",
         },
         "VISUALVM_PLATFORM_SPECIFIC" : {
             "os_arch" : {
                 "linux" : {
                     "amd64" : {
-                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.2-7-linux-amd64.tar.gz"],
-                        "sha1" : "5d4fb23805f82720b40fcc76179e1eb348cdd9d4",
+                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.3-1-linux-amd64.tar.gz"],
+                        "sha1" : "1cb144685f21614e4dc19a4bb7c5905723a63b2a",
                     },
                     "aarch64" : {
-                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.2-7-linux-aarch64.tar.gz"],
-                        "sha1" : "76c0c9f4677b60864b67fe1c02c5af9def86275a",
+                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.3-1-linux-aarch64.tar.gz"],
+                        "sha1" : "d46a6131c425709911b57b2232eeded9af8debb3",
                     }
                 },
                 "darwin" : {
                     "amd64" : {
-                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.2-7-macosx-x86_64.tar.gz"],
-                        "sha1" : "3dfc8cae6ddfc1432e1ffd702a491d14ea8b5b5f",
+                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.3-1-macosx-x86_64.tar.gz"],
+                        "sha1" : "b9356714d59b15a65262067c0b8d9255ccb48c5d",
                     }
                 },
                 "windows" : {
                     "amd64" : {
-                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.2-7-windows-amd64.tar.gz"],
-                        "sha1" : "8937b79f38705ae7b952d40df0ff1b8c846df43f",
+                        "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/visualvm/visualvm-21.3-1-windows-amd64.tar.gz"],
+                        "sha1" : "2f3e2683779034918489d3f7759e290cdd0a10ae",
                     }
                 },
             }

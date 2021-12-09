@@ -26,6 +26,7 @@ package com.oracle.svm.hosted.image;
 
 import static com.oracle.svm.core.util.VMError.shouldNotReachHere;
 
+import java.lang.reflect.Executable;
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -47,12 +48,15 @@ import org.graalvm.compiler.options.Option;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.c.function.CFunctionPointer;
+import org.graalvm.nativeimage.impl.RuntimeReflectionSupport;
 import org.graalvm.word.UnsignedWord;
 import org.graalvm.word.WordFactory;
 
 import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.meta.AnalysisMetaAccess;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.objectfile.ObjectFile;
+import com.oracle.svm.core.SubstrateOptions;
 import com.oracle.svm.core.code.CodeInfo;
 import com.oracle.svm.core.code.CodeInfoAccess;
 import com.oracle.svm.core.code.CodeInfoEncoder;
@@ -68,6 +72,7 @@ import com.oracle.svm.core.deopt.DeoptEntryInfopoint;
 import com.oracle.svm.core.graal.code.SubstrateDataBuilder;
 import com.oracle.svm.core.meta.SubstrateObjectConstant;
 import com.oracle.svm.core.option.HostedOptionKey;
+import com.oracle.svm.core.option.HostedOptionValues;
 import com.oracle.svm.core.util.Counter;
 import com.oracle.svm.core.util.VMError;
 import com.oracle.svm.hosted.NativeImageOptions;
@@ -78,6 +83,7 @@ import com.oracle.svm.hosted.code.HostedImageHeapConstantPatch;
 import com.oracle.svm.hosted.image.NativeImage.NativeTextSectionImpl;
 import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedType;
+import com.oracle.svm.hosted.substitute.SubstitutionReflectivityFilter;
 
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.site.Call;
@@ -87,6 +93,7 @@ import jdk.vm.ci.code.site.Infopoint;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
+import jdk.vm.ci.meta.JavaType;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.VMConstant;
 
@@ -160,7 +167,7 @@ public abstract class NativeImageCodeCache {
                 }
             }
         }
-        dataSection.close();
+        dataSection.close(HostedOptionValues.singleton());
     }
 
     public void addConstantsToHeap() {
@@ -216,6 +223,44 @@ public abstract class NativeImageCodeCache {
             final HostedMethod method = entry.getKey();
             final CompilationResult compilation = entry.getValue();
             codeInfoEncoder.addMethod(method, compilation, method.getCodeAddressOffset());
+        }
+
+        for (HostedType type : imageHeap.getUniverse().getTypes()) {
+            if (type.getWrapped().isReachable()) {
+                codeInfoEncoder.prepareMetadataForClass(type.getJavaClass());
+            }
+        }
+
+        if (SubstrateOptions.ConfigureReflectionMetadata.getValue()) {
+            for (Executable queriedMethod : ImageSingletons.lookup(RuntimeReflectionSupport.class).getQueriedOnlyMethods()) {
+                if (SubstitutionReflectivityFilter.shouldExclude(queriedMethod, (AnalysisMetaAccess) imageHeap.getMetaAccess().getWrapped(), imageHeap.getAnalysisUniverse())) {
+                    continue;
+                }
+                HostedMethod method = imageHeap.getMetaAccess().optionalLookupJavaMethod(queriedMethod);
+                if (method != null) {
+                    codeInfoEncoder.prepareMetadataForMethod(method, queriedMethod, true);
+                }
+            }
+            for (Object method : ImageSingletons.lookup(RuntimeReflectionSupport.class).getHiddenMethods()) {
+                AnalysisMethod hiddenMethod = (AnalysisMethod) method;
+                JavaType[] parameterTypes = hiddenMethod.getSignature().toParameterTypes(null);
+                Class<?>[] parameterClasses = new Class<?>[parameterTypes.length];
+                for (int i = 0; i < parameterTypes.length; ++i) {
+                    parameterClasses[i] = imageHeap.getUniverse().lookup(parameterTypes[i]).getHub().getHostedJavaClass();
+                }
+                codeInfoEncoder.prepareHiddenMethodMetadata(imageHeap.getUniverse().lookup(hiddenMethod.getDeclaringClass()), hiddenMethod.getName(), parameterClasses);
+            }
+        }
+        if (SubstrateOptions.IncludeMethodData.getValue()) {
+            for (HostedMethod method : imageHeap.getUniverse().getMethods()) {
+                if (method.getWrapped().isReachable() && method.hasJavaMethod()) {
+                    Executable reflectMethod = method.getJavaMethod();
+                    if (SubstitutionReflectivityFilter.shouldExclude(reflectMethod, (AnalysisMetaAccess) imageHeap.getMetaAccess().getWrapped(), imageHeap.getAnalysisUniverse())) {
+                        continue;
+                    }
+                    codeInfoEncoder.prepareMetadataForMethod(method, method.getJavaMethod(), false);
+                }
+            }
         }
 
         if (NativeImageOptions.PrintMethodHistogram.getValue()) {

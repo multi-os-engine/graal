@@ -39,10 +39,11 @@ import org.graalvm.compiler.nodes.ValueNode;
 import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
 import org.graalvm.compiler.nodes.java.MethodCallTargetNode;
 
-import com.oracle.svm.core.graal.nodes.DeadEndNode;
+import com.oracle.svm.core.graal.nodes.LoweredDeadEndNode;
 import com.oracle.svm.core.nodes.SubstrateMethodCallTargetNode;
 import com.oracle.svm.core.snippets.ImplicitExceptions;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.util.ClassUtil;
 
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 
@@ -81,15 +82,15 @@ public final class ExceptionSynthesizer {
 
     private static void registerMethod(Class<?> exceptionClass) {
         try {
-            exceptionMethods.put(Key.from(exceptionClass), ImplicitExceptions.class.getDeclaredMethod("throw" + exceptionClass.getSimpleName()));
+            exceptionMethods.put(Key.from(exceptionClass), ImplicitExceptions.class.getDeclaredMethod("throw" + ClassUtil.getUnqualifiedName(exceptionClass)));
         } catch (NoSuchMethodException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
     }
 
-    private static void registerMethod(Class<?> exceptionClass, Class<?> paramterClass) {
+    private static void registerMethod(Class<?> exceptionClass, Class<?> parameterClass) {
         try {
-            exceptionMethods.put(Key.from(exceptionClass, paramterClass), ImplicitExceptions.class.getDeclaredMethod("throw" + exceptionClass.getSimpleName(), paramterClass));
+            exceptionMethods.put(Key.from(exceptionClass, parameterClass), ImplicitExceptions.class.getDeclaredMethod("throw" + ClassUtil.getUnqualifiedName(exceptionClass), parameterClass));
         } catch (NoSuchMethodException ex) {
             throw VMError.shouldNotReachHere(ex);
         }
@@ -122,7 +123,7 @@ public final class ExceptionSynthesizer {
         MethodCallTargetNode callTarget = b.add(new SubstrateMethodCallTargetNode(InvokeKind.Static, exceptionMethod, new ValueNode[]{messageNode}, returnStamp, null, null));
         b.add(new InvokeWithExceptionNode(callTarget, null, b.bci()));
         /* The invoked method always throws an exception, i.e., never returns. */
-        b.add(new DeadEndNode());
+        b.add(new LoweredDeadEndNode());
     }
 
     /**

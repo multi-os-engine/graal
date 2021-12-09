@@ -47,12 +47,16 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLStreamHandler;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.StandardOpenOption;
+import java.security.CodeSigner;
+import java.security.CodeSource;
+import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -156,7 +160,7 @@ final class HostClassLoader extends ClassLoader implements Closeable {
         try {
             byte[] content = res.getContent();
             definePackage(className);
-            return defineClass(className, content, 0, content.length);
+            return defineClass(className, content, 0, content.length, res.getProtectionDomain());
         } catch (IOException ioe) {
             throw new ClassNotFoundException("Cannot load class: " + className, ioe);
         }
@@ -222,13 +226,21 @@ final class HostClassLoader extends ClassLoader implements Closeable {
 
     private abstract static class Resource {
 
-        abstract URL getURL();
+        private final ProtectionDomain protectionDomain;
 
-        abstract URL getOwner();
+        Resource(ProtectionDomain protectionDomain) {
+            this.protectionDomain = protectionDomain;
+        }
+
+        abstract URL getURL();
 
         abstract long getLength() throws IOException;
 
         abstract InputStream getInputStream() throws IOException;
+
+        final ProtectionDomain getProtectionDomain() {
+            return protectionDomain;
+        }
 
         byte[] getContent() throws IOException {
             long lenl = getLength();
@@ -272,25 +284,54 @@ final class HostClassLoader extends ClassLoader implements Closeable {
                 return res;
             }
         }
+    }
 
-        static URL urlOrNull(URI uri) {
+    private abstract static class Loader implements Closeable {
+
+        final TruffleFile root;
+        final ProtectionDomain protectionDomain;
+
+        Loader(TruffleFile root) {
+            this.root = root;
+            URL rootURL;
             try {
-                return uri.toURL();
+                rootURL = root.toUri().toURL();
             } catch (MalformedURLException e) {
-                return null;
+                rootURL = null;
             }
+            this.protectionDomain = rootURL == null ? null : new ProtectionDomain(new CodeSource(rootURL, (CodeSigner[]) null), null);
+        }
+
+        abstract Resource findResource(String name);
+    }
+
+    private static final class ResourceURLStreamHandler extends URLStreamHandler {
+
+        private final Resource resource;
+
+        ResourceURLStreamHandler(Resource resource) {
+            this.resource = resource;
+        }
+
+        @Override
+        protected URLConnection openConnection(URL u) {
+            return new URLConnection(u) {
+                @Override
+                public void connect() {
+                }
+
+                @Override
+                public InputStream getInputStream() throws IOException {
+                    return resource.getInputStream();
+                }
+            };
         }
     }
 
-    private interface Loader extends Closeable {
-        Resource findResource(String name);
-    }
-
-    private static final class FolderLoader implements Loader {
-        private final TruffleFile root;
+    private static final class FolderLoader extends Loader {
 
         FolderLoader(TruffleFile root) {
-            this.root = root;
+            super(root);
         }
 
         @Override
@@ -299,15 +340,15 @@ final class HostClassLoader extends ClassLoader implements Closeable {
             if (!file.isRegularFile()) {
                 return null;
             }
-            return new Resource() {
-                @Override
-                public URL getURL() {
-                    return urlOrNull(file.toUri());
-                }
+            return new Resource(protectionDomain) {
 
                 @Override
-                public URL getOwner() {
-                    return urlOrNull(root.toUri());
+                public URL getURL() {
+                    try {
+                        return new URL((URL) null, file.toUri().toString(), new ResourceURLStreamHandler(this));
+                    } catch (MalformedURLException malformed) {
+                        return null;
+                    }
                 }
 
                 @Override
@@ -332,15 +373,15 @@ final class HostClassLoader extends ClassLoader implements Closeable {
         }
     }
 
-    private static final class JarLoader implements Loader {
-        private final TruffleFile root;
+    private static final class JarLoader extends Loader {
+
         /**
          * Cache for fast resource lookup. Map of folder to files in the folder.
          */
         private volatile Map<String, Map<String, ZipUtils.Info>> content;
 
         JarLoader(TruffleFile root) {
-            this.root = root;
+            super(root);
         }
 
         @Override
@@ -356,25 +397,19 @@ final class HostClassLoader extends ClassLoader implements Closeable {
                     return null;
                 }
 
-                return new Resource() {
+                return new Resource(protectionDomain) {
 
                     @Override
                     URL getURL() {
-                        StringBuilder url = new StringBuilder(root.toUri().toString());
-                        if (url.charAt(url.length() - 1) != '/') {
-                            url.append('/');
-                        }
+                        StringBuilder url = new StringBuilder("jar:");
+                        url.append(root.toUri());
+                        url.append("!/");
                         url.append(name);
                         try {
-                            return new URL(url.toString());
+                            return new URL(null, url.toString(), new ResourceURLStreamHandler(this));
                         } catch (MalformedURLException malformed) {
                             return null;
                         }
-                    }
-
-                    @Override
-                    URL getOwner() {
-                        return urlOrNull(root.toUri());
                     }
 
                     @Override

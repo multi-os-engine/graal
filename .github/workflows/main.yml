@@ -29,6 +29,7 @@ concurrency:
 env:
   LANG: en_US.UTF-8
   MX_GIT_CACHE: refcache
+  MX_PYTHON_VERSION: 3
   JAVA_HOME: ${{ github.workspace }}/jdk
   MX_PATH: ${{ github.workspace }}/mx
 
@@ -81,6 +82,10 @@ jobs:
               PRIMARY: "substratevm"
           - env:
               JDK: "labsjdk-ce-11"
+              GATE: "hellomodule"
+              PRIMARY: "substratevm"
+          - env:
+              JDK: "labsjdk-ce-11"
               GATE: "style,fullbuild"
               PRIMARY: "compiler"
           - env:
@@ -93,6 +98,10 @@ jobs:
               PRIMARY: "compiler"
           - env:
               JDK: "labsjdk-ce-11"
+              GATE: "build"
+              PRIMARY: "vm"
+              DYNAMIC_IMPORTS: "/tools,/substratevm,/sulong"
+              NATIVE_IMAGES: "polyglot"
               WITHOUT_VCS: true
     steps:
     - uses: actions/checkout@v2
@@ -113,7 +122,7 @@ jobs:
       env: ${{ matrix.env }}
       run: |
         mkdir jdk-dl
-        ${MX_PATH}/mx fetch-jdk --java-distribution ${JDK} --to jdk-dl --alias ${JAVA_HOME}
+        ${MX_PATH}/mx fetch-jdk --jdk-id ${JDK} --to jdk-dl --alias ${JAVA_HOME}
     - name: Update dependency cache
       if: ${{ contains(matrix.env.GATE, 'debug') || contains(matrix.env.GATE, 'style') }}
       run: sudo apt update
@@ -124,8 +133,9 @@ jobs:
       if: ${{ contains(matrix.env.GATE, 'style') }}
       run: |
         sudo apt install python-pip python-setuptools 
-        sudo pip install astroid==1.1.0
-        sudo pip install pylint==1.1.0
+        cat common.json |
+          jq -r '.deps.common.packages | to_entries[] | select(.key | startswith("pip:")) | (.key | split(":")[1]) + .value' |
+          xargs sudo pip install
     - name: Build GraalVM and run gate
       env: ${{ matrix.env }}
       run: |
@@ -155,7 +165,6 @@ jobs:
         if [[ ${WITHOUT_VCS} ]]
         then
           rm -rf .git
-          ${MX_PATH}/mx --primary-suite-path substratevm native-image --help
-        else
-          ${MX_PATH}/mx --primary-suite-path ${PRIMARY} --J @"-Xmx2g" --java-home=${JAVA_HOME} gate --strict-mode --tags ${GATE}
         fi
+
+        ${MX_PATH}/mx --primary-suite-path ${PRIMARY} --J @"-Xmx2g" --java-home=${JAVA_HOME} gate --strict-mode --tags ${GATE}

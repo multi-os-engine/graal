@@ -26,18 +26,33 @@
 
 package com.oracle.objectfile.debugentry;
 
-public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> {
+import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugCodeInfo;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugLineInfo;
+import com.oracle.objectfile.debuginfo.DebugInfoProvider.DebugMethodInfo;
+
+public class MethodEntry extends MemberEntry {
     final TypeEntry[] paramTypes;
     final String[] paramNames;
-    final boolean isDeoptTarget;
+    static final int DEOPT = 1 << 0;
+    static final int IN_RANGE = 1 << 1;
+    static final int INLINED = 1 << 2;
+    int flags;
+    final String symbolName;
 
-    public MethodEntry(FileEntry fileEntry, String methodName, ClassEntry ownerType, TypeEntry valueType, TypeEntry[] paramTypes, String[] paramNames, int modifiers, boolean isDeoptTarget) {
-        super(fileEntry, methodName, ownerType, valueType, modifiers);
+    public MethodEntry(DebugInfoBase debugInfoBase, DebugMethodInfo debugMethodInfo,
+                    FileEntry fileEntry, String methodName, ClassEntry ownerType,
+                    TypeEntry valueType, TypeEntry[] paramTypes, String[] paramNames) {
+        super(fileEntry, methodName, ownerType, valueType, debugMethodInfo.modifiers());
         assert ((paramTypes == null && paramNames == null) ||
                         (paramTypes != null && paramNames != null && paramTypes.length == paramNames.length));
         this.paramTypes = paramTypes;
         this.paramNames = paramNames;
-        this.isDeoptTarget = isDeoptTarget;
+        this.symbolName = debugMethodInfo.symbolNameForMethod();
+        this.flags = 0;
+        if (debugMethodInfo.isDeoptTarget()) {
+            setIsDeopt();
+        }
+        updateRangeInfo(debugInfoBase, debugMethodInfo);
     }
 
     public String methodName() {
@@ -60,6 +75,10 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
         return paramTypes[idx];
     }
 
+    public TypeEntry[] getParamTypes() {
+        return paramTypes;
+    }
+
     public String getParamTypeName(int idx) {
         assert paramTypes != null;
         assert idx < paramTypes.length;
@@ -74,60 +93,67 @@ public class MethodEntry extends MemberEntry implements Comparable<MethodEntry> 
         return paramNames[idx];
     }
 
-    public int compareTo(String methodName, String paramSignature, String returnTypeName) {
-        int nameComparison = memberName.compareTo(methodName);
-        if (nameComparison != 0) {
-            return nameComparison;
-        }
-        int typeComparison = valueType.getTypeName().compareTo(returnTypeName);
-        if (typeComparison != 0) {
-            return typeComparison;
-        }
-        String[] paramTypeNames = paramSignature.split((","));
-        int length;
-        if (paramSignature.trim().length() == 0) {
-            length = 0;
-        } else {
-            length = paramTypeNames.length;
-        }
-        int paramCountComparison = getParamCount() - length;
-        if (paramCountComparison != 0) {
-            return paramCountComparison;
-        }
-        for (int i = 0; i < getParamCount(); i++) {
-            int paraComparison = getParamTypeName(i).compareTo(paramTypeNames[i].trim());
-            if (paraComparison != 0) {
-                return paraComparison;
-            }
-        }
-        return 0;
+    private void setIsDeopt() {
+        flags |= DEOPT;
     }
 
-    public boolean isDeoptTarget() {
-        return isDeoptTarget;
+    public boolean isDeopt() {
+        return (flags & DEOPT) != 0;
     }
 
-    @Override
-    public int compareTo(MethodEntry other) {
-        assert other != null;
-        int nameComparison = methodName().compareTo(other.methodName());
-        if (nameComparison != 0) {
-            return nameComparison;
-        }
-        int typeComparison = valueType.getTypeName().compareTo(other.valueType.getTypeName());
-        if (typeComparison != 0) {
-            return typeComparison;
-        }
-        int paramCountComparison = getParamCount() - other.getParamCount();
-        if (paramCountComparison != 0) {
-            return paramCountComparison;
-        }
-        for (int i = 0; i < getParamCount(); i++) {
-            int paramComparison = getParamTypeName(i).compareTo(other.getParamTypeName(i));
-            if (paramComparison != 0) {
-                return paramComparison;
+    private void setIsInRange() {
+        flags |= IN_RANGE;
+    }
+
+    public boolean isInRange() {
+        return (flags & IN_RANGE) != 0;
+    }
+
+    private void setIsInlined() {
+        flags |= INLINED;
+    }
+
+    public boolean isInlined() {
+        return (flags & INLINED) != 0;
+    }
+
+    /**
+     * Sets {@code isInRange} and ensures that the {@code fileEntry} is up to date. If the
+     * MethodEntry was added by traversing the DeclaredMethods of a Class its fileEntry will point
+     * to the original source file, thus it will be wrong for substituted methods. As a result when
+     * setting a MethodEntry as isInRange we also make sure that its fileEntry reflects the file
+     * info associated with the corresponding Range.
+     * 
+     * @param debugInfoBase
+     * @param debugMethodInfo
+     */
+    public void updateRangeInfo(DebugInfoBase debugInfoBase, DebugMethodInfo debugMethodInfo) {
+        if (debugMethodInfo instanceof DebugLineInfo) {
+            DebugLineInfo lineInfo = (DebugLineInfo) debugMethodInfo;
+            if (lineInfo.getCaller() != null) {
+                /* this is a real inlined method not just a top level primary range */
+                setIsInlined();
+            }
+        } else if (debugMethodInfo instanceof DebugCodeInfo) {
+            /* this method has been seen in a primary range */
+            if (isInRange()) {
+                /* it has already been seen -- just check for consistency */
+                assert fileEntry == debugInfoBase.ensureFileEntry(debugMethodInfo);
+            } else {
+                /*
+                 * If the MethodEntry was added by traversing the DeclaredMethods of a Class its
+                 * fileEntry may point to the original source file, which will be wrong for
+                 * substituted methods. As a result when setting a MethodEntry as isInRange we also
+                 * make sure that its fileEntry reflects the file info associated with the
+                 * corresponding Range.
+                 */
+                setIsInRange();
+                fileEntry = debugInfoBase.ensureFileEntry(debugMethodInfo);
             }
         }
-        return 0;
+    }
+
+    public String getSymbolName() {
+        return symbolName;
     }
 }

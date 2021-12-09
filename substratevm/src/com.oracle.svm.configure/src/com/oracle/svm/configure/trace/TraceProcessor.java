@@ -25,12 +25,14 @@
 package com.oracle.svm.configure.trace;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.Reader;
+import java.io.StringWriter;
 import java.util.List;
 import java.util.Map;
 
-import com.oracle.svm.configure.config.PredefinedClassesConfiguration;
 import com.oracle.svm.configure.ConfigurationBase;
+import com.oracle.svm.configure.config.PredefinedClassesConfiguration;
 import com.oracle.svm.configure.config.ProxyConfiguration;
 import com.oracle.svm.configure.config.ResourceConfiguration;
 import com.oracle.svm.configure.config.SerializationConfiguration;
@@ -45,34 +47,60 @@ public class TraceProcessor extends AbstractProcessor {
     private final SerializationProcessor serializationProcessor;
     private final ClassLoadingProcessor classLoadingProcessor;
 
+    private final TraceProcessor omittedConfigProcessor;
+
     public TraceProcessor(AccessAdvisor accessAdvisor, TypeConfiguration jniConfiguration, TypeConfiguration reflectionConfiguration,
                     ProxyConfiguration proxyConfiguration, ResourceConfiguration resourceConfiguration, SerializationConfiguration serializationConfiguration,
-                    PredefinedClassesConfiguration predefinedClassesConfiguration) {
+                    PredefinedClassesConfiguration predefinedClassesConfiguration, TraceProcessor omittedConfigProcessor) {
         advisor = accessAdvisor;
         jniProcessor = new JniProcessor(this.advisor, jniConfiguration, reflectionConfiguration);
         reflectionProcessor = new ReflectionProcessor(this.advisor, reflectionConfiguration, proxyConfiguration, resourceConfiguration);
         serializationProcessor = new SerializationProcessor(this.advisor, serializationConfiguration);
         classLoadingProcessor = new ClassLoadingProcessor(predefinedClassesConfiguration);
+        this.omittedConfigProcessor = omittedConfigProcessor;
     }
 
     public TypeConfiguration getJniConfiguration() {
-        return jniProcessor.getConfiguration();
+        TypeConfiguration result = jniProcessor.getConfiguration();
+        if (omittedConfigProcessor != null) {
+            result = TypeConfiguration.copyAndSubtract(result, omittedConfigProcessor.jniProcessor.getConfiguration());
+        }
+        return result;
     }
 
     public TypeConfiguration getReflectionConfiguration() {
-        return reflectionProcessor.getConfiguration();
+        TypeConfiguration result = reflectionProcessor.getConfiguration();
+        if (omittedConfigProcessor != null) {
+            result = TypeConfiguration.copyAndSubtract(result, omittedConfigProcessor.reflectionProcessor.getConfiguration());
+        }
+        return result;
     }
 
     public ProxyConfiguration getProxyConfiguration() {
-        return reflectionProcessor.getProxyConfiguration();
+        ProxyConfiguration result = reflectionProcessor.getProxyConfiguration();
+        if (omittedConfigProcessor != null) {
+            result = new ProxyConfiguration(result);
+            result.removeAll(omittedConfigProcessor.reflectionProcessor.getProxyConfiguration());
+        }
+        return result;
     }
 
     public ResourceConfiguration getResourceConfiguration() {
-        return reflectionProcessor.getResourceConfiguration();
+        ResourceConfiguration result = reflectionProcessor.getResourceConfiguration();
+        if (omittedConfigProcessor != null) {
+            result = new ResourceConfiguration(result);
+            result.removeAll(omittedConfigProcessor.reflectionProcessor.getResourceConfiguration());
+        }
+        return result;
     }
 
     public SerializationConfiguration getSerializationConfiguration() {
-        return serializationProcessor.getSerializationConfiguration();
+        SerializationConfiguration result = serializationProcessor.getSerializationConfiguration();
+        if (omittedConfigProcessor != null) {
+            result = new SerializationConfiguration(result);
+            result.removeAll(omittedConfigProcessor.serializationProcessor.getSerializationConfiguration());
+        }
+        return result;
     }
 
     public PredefinedClassesConfiguration getPredefinedClassesConfiguration() {
@@ -147,9 +175,9 @@ public class TraceProcessor extends AbstractProcessor {
                     break;
             }
         } catch (Exception e) {
-            StackTraceElement stackTraceElement = e.getStackTrace()[0];
-            logWarning("Error processing trace entry: " + e.toString() +
-                            " (at " + stackTraceElement.getClassName() + ":" + stackTraceElement.getLineNumber() + ") : " + entry.toString());
+            StringWriter stackTrace = new StringWriter();
+            e.printStackTrace(new PrintWriter(stackTrace));
+            logWarning("Error processing trace entry " + entry.toString() + ": " + stackTrace);
         }
     }
 

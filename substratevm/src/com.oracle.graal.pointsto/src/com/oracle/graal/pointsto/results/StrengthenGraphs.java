@@ -72,7 +72,7 @@ import org.graalvm.compiler.phases.common.CanonicalizerPhase.CustomSimplificatio
 import org.graalvm.compiler.phases.common.inlining.InliningUtil;
 import org.graalvm.compiler.printer.GraalDebugHandlersFactory;
 
-import com.oracle.graal.pointsto.BigBang;
+import com.oracle.graal.pointsto.PointsToAnalysis;
 import com.oracle.graal.pointsto.flow.InvokeTypeFlow;
 import com.oracle.graal.pointsto.flow.MethodFlowsGraph;
 import com.oracle.graal.pointsto.flow.MethodTypeFlow;
@@ -82,6 +82,8 @@ import com.oracle.graal.pointsto.meta.AnalysisField;
 import com.oracle.graal.pointsto.meta.AnalysisMethod;
 import com.oracle.graal.pointsto.meta.AnalysisType;
 import com.oracle.graal.pointsto.typestate.TypeState;
+
+import com.oracle.svm.util.ImageBuildStatistics;
 
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaMethodProfile;
@@ -107,7 +109,7 @@ import jdk.vm.ci.meta.ResolvedJavaType;
  */
 public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
 
-    public StrengthenGraphs(BigBang bb, Universe converter) {
+    public StrengthenGraphs(PointsToAnalysis bb, Universe converter) {
         super(bb, converter);
     }
 
@@ -398,6 +400,10 @@ public abstract class StrengthenGraphs extends AbstractAnalysisResultsBuilder {
          * allows later inlining of the callee.
          */
         private void devirtualizeInvoke(AnalysisMethod singleCallee, Invoke invoke) {
+            if (ImageBuildStatistics.Options.CollectImageBuildStatistics.getValue(graph.getOptions())) {
+                ImageBuildStatistics.counters().incDevirtualizedInvokeCounter();
+            }
+
             Stamp anchoredReceiverStamp = StampFactory.object(TypeReference.createWithoutAssumptions(singleCallee.getDeclaringClass()));
             ValueNode piReceiver = insertPi(invoke.getReceiver(), anchoredReceiverStamp, (FixedWithNextNode) invoke.asNode().predecessor());
             if (piReceiver != null) {

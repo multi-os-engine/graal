@@ -39,9 +39,9 @@
 # SOFTWARE.
 #
 suite = {
-  "mxversion" : "5.301.0",
+  "mxversion" : "5.309.1",
   "name" : "sdk",
-  "version" : "21.2.0.1",
+  "version" : "21.3.0",
   "release" : True,
   "sourceinprojectwhitelist" : [],
   "url" : "https://github.com/oracle/graal",
@@ -108,32 +108,66 @@ suite = {
       "sha1" : "4cb5f6c20b10912ef3c12f4c4c3ebcdbcbe3a555",
       "version" : "3.16.0.1",
       "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/jline3-shadowed-{version}.jar"],
-      "license" : "BSD-new"
+      "license" : "BSD-new",
+      "requires" : ["java.logging"],
+      "exports" : [
+        "org.graalvm.shadowed.org.fusesource.hawtjni.runtime",
+        "org.graalvm.shadowed.org.fusesource.jansi",
+        "org.graalvm.shadowed.org.fusesource.jansi.internal",
+        "org.graalvm.shadowed.org.jline.builtins",
+        "org.graalvm.shadowed.org.jline.builtins.ssh",
+        "org.graalvm.shadowed.org.jline.builtins.telnet",
+        "org.graalvm.shadowed.org.jline.console",
+        "org.graalvm.shadowed.org.jline.console.impl",
+        "org.graalvm.shadowed.org.jline.keymap",
+        "org.graalvm.shadowed.org.jline.reader",
+        "org.graalvm.shadowed.org.jline.reader.impl",
+        "org.graalvm.shadowed.org.jline.reader.impl.completer",
+        "org.graalvm.shadowed.org.jline.reader.impl.history",
+        "org.graalvm.shadowed.org.jline.style",
+        "org.graalvm.shadowed.org.jline.terminal",
+        "org.graalvm.shadowed.org.jline.terminal.impl",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jansi",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jansi.freebsd",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jansi.linux",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jansi.osx",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jansi.solaris",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jansi.win",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jna",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jna.freebsd",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jna.linux",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jna.osx",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jna.solaris",
+        "org.graalvm.shadowed.org.jline.terminal.impl.jna.win",
+        "org.graalvm.shadowed.org.jline.terminal.spi",
+        "org.graalvm.shadowed.org.jline.utils",
+        "org.graalvm.shadowed.org.jline.widget",
+      ],
     },
     "LLVM_ORG" : {
-      "version" : "10.0.0-6-gad4288df64-bg263fb7a415",
+      "version" : "12.0.1-3-g6e0a5672bc-bgf11ed69a5a",
       "host" : "https://lafo.ssw.uni-linz.ac.at/pub/llvm-org",
       "os_arch" : {
         "linux" : {
           "amd64" : {
             "urls" : ["{host}/llvm-llvmorg-{version}-linux-amd64.tar.gz"],
-            "sha1" : "89521da049c9275f63cc11c9f60a40050deec61c",
+            "sha1" : "9a22c2f67f359e62fe9bcf8d89c24295f9d489dd",
           },
           "aarch64" : {
             "urls" : ["{host}/llvm-llvmorg-{version}-linux-aarch64.tar.gz"],
-            "sha1" : "f0bdf96d621e0de31fb0e2036d77ff18d2fe87e2",
+            "sha1" : "c61f0795a8b3ca6fedcb640aa9b93db7d1c5bb14",
           }
         },
         "darwin" : {
           "amd64" : {
             "urls" : ["{host}/llvm-llvmorg-{version}-darwin-amd64.tar.gz"],
-            "sha1" : "e25ea07786bcb55c186b9bf9a20d5fcefd5587b1",
+            "sha1" : "f820252fc848e3f7ab7a7ebbe8e9b2d4b129a98e",
           }
         },
         "windows" : {
           "amd64" : {
             "urls" : ["{host}/llvm-llvmorg-{version}-windows-amd64.tar.gz"],
-            "sha1" : "cbff9162b4a67dbaaa31efdb1002fd01912de5e5",
+            "sha1" : "a321d009a97545f8a6cf301678a79b4166a31d22",
           }
         },
         "<others>": {
@@ -145,19 +179,19 @@ suite = {
       "license" : "Apache-2.0-LLVM",
     },
     "LLVM_ORG_COMPILER_RT_LINUX" : {
-      "version" : "10.0.0-6-gad4288df64-bg263fb7a415",
+      "version" : "12.0.1-3-g6e0a5672bc-bgf11ed69a5a",
       "host" : "https://lafo.ssw.uni-linz.ac.at/pub/llvm-org",
       # we really want linux-amd64, also on non-linux and non-amd64 platforms for cross-compilation
       "urls" : ["{host}/compiler-rt-llvmorg-{version}-linux-amd64.tar.gz"],
-      "sha1" : "687e1a131efb2b43b57c9b22849e642151845bfe",
+      "sha1" : "daf84066ea4f77f1b0ee7c96b14b948ae56517e9",
       "license" : "Apache-2.0-LLVM",
     },
     "LLVM_ORG_SRC" : {
-      "version" : "10.0.0-6-gad4288df64-bg263fb7a415",
+      "version" : "12.0.1-3-g6e0a5672bc-bgf11ed69a5a",
       "host" : "https://lafo.ssw.uni-linz.ac.at/pub/llvm-org",
       "packedResource" : True,
       "urls" : ["{host}/llvm-src-llvmorg-{version}.tar.gz"],
-      "sha1" : "c5340ed83c3ff6040ed2dc49ab070a4cd0ccceea",
+      "sha1" : "623d031f0f0ec296557138b46ad153af65f839e3",
       "license" : "Apache-2.0-LLVM",
       },
   },
@@ -332,6 +366,7 @@ suite = {
           "org.graalvm.nativeimage.c.constant",
           "org.graalvm.nativeimage.c",
           "org.graalvm.nativeimage",
+          "org.graalvm.nativeimage.impl", # Uses of org.graalvm.nativeimage.impl.RuntimeSerializationSupport
           "org.graalvm.nativeimage.impl.clinit", # class initialization instrumentation
           "org.graalvm.polyglot.proxy",
           "org.graalvm.polyglot.io",
@@ -341,7 +376,7 @@ suite = {
           "org.graalvm.word",
           "org.graalvm.polyglot.impl to org.graalvm.truffle",
           "org.graalvm.word.impl to jdk.internal.vm.compiler",
-          "org.graalvm.nativeimage.impl to org.graalvm.nativeimage.builder,com.oracle.svm.svm_enterprise",
+          "org.graalvm.nativeimage.impl to org.graalvm.nativeimage.builder,org.graalvm.nativeimage.configure,com.oracle.svm.svm_enterprise",
         ],
         "uses" : [
           "org.graalvm.polyglot.impl.AbstractPolyglotImpl"
@@ -370,6 +405,9 @@ suite = {
       "subDir" : "src",
       "moduleInfo" : {
         "name" : "org.graalvm.launcher",
+        "exports" : [
+          "org.graalvm.launcher",
+        ],
       },
       "dependencies" : [
         "org.graalvm.launcher",
