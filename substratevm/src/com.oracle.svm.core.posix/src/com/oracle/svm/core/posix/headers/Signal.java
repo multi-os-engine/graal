@@ -127,7 +127,7 @@ public class Signal {
         mcontext_linux_aarch64_t uc_mcontext_linux_aarch64();
 
         @CField("uc_mcontext")
-        @Platforms({Platform.DARWIN_AMD64.class})
+        @Platforms({Platform.DARWIN_AMD64.class, Platform.IOS_AMD64.class})
         AMD64DarwinMContext64 uc_mcontext_darwin_amd64();
 
         @CField("uc_mcontext")
@@ -353,7 +353,7 @@ public class Signal {
      * Information about _STRUCT_X86_THREAD_STATE64 can be found at
      * https://github.com/apple/darwin-xnu/blob/2ff845c2e033bd0ff64b5b6aa6063a1f8f65aa32/osfmk/mach/i386/_structs.h#L739
      */
-    @Platforms({Platform.DARWIN_AMD64.class})
+    @Platforms({Platform.DARWIN_AMD64.class, Platform.IOS_AMD64.class})
     @CStruct(value = "__darwin_mcontext64", addStructKeyword = true)
     public interface AMD64DarwinMContext64 extends PointerBase {
         @CFieldOffset("__ss.__rax")
