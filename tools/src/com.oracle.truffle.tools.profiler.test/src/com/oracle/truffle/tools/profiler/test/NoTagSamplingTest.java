@@ -42,7 +42,6 @@ import org.junit.Test;
 
 import com.oracle.truffle.api.CallTarget;
 import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -123,7 +122,7 @@ public class NoTagSamplingTest {
         }
 
         private RootCallTarget newTarget() {
-            return Truffle.getRuntime().createCallTarget(new LILRootNode(this));
+            return new LILRootNode(this).getCallTarget();
         }
     }
 }

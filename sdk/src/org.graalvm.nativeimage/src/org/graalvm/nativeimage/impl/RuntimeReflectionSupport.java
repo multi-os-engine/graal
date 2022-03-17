@@ -51,5 +51,11 @@ public interface RuntimeReflectionSupport extends ReflectionRegistry {
      * Returns the methods that shadow a superclass method registered for reflection, to be excluded
      * from reflection queries.
      */
-    Set<?> getHiddenMethods();
+    Set<?> getHidingMethods();
+
+    int getReflectionClassesCount();
+
+    int getReflectionMethodsCount();
+
+    int getReflectionFieldsCount();
 }

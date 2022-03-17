@@ -81,6 +81,11 @@ public final class Meta implements ContextAccess {
 
         // Core types.
         java_lang_Object = knownKlass(Type.java_lang_Object);
+        if (context.JDWPOptions != null) {
+            HIDDEN_OBJECT_EXTENSION_FIELD = java_lang_Object.requireHiddenField(Name.extensionFieldName);
+        } else {
+            HIDDEN_OBJECT_EXTENSION_FIELD = null;
+        }
         java_lang_Cloneable = knownKlass(Type.java_lang_Cloneable);
         java_io_Serializable = knownKlass(Type.java_io_Serializable);
         ARRAY_SUPERINTERFACES = new ObjectKlass[]{java_lang_Cloneable, java_io_Serializable};
@@ -359,9 +364,7 @@ public final class Meta implements ContextAccess {
                         .field(higher(14), Name.interrupted, Type._boolean) //
                         .maybeHiddenfield(java_lang_Thread);
         HIDDEN_HOST_THREAD = java_lang_Thread.requireHiddenField(Name.HIDDEN_HOST_THREAD);
-        HIDDEN_DEATH = java_lang_Thread.requireHiddenField(Name.HIDDEN_DEATH);
-        HIDDEN_DEATH_THROWABLE = java_lang_Thread.requireHiddenField(Name.HIDDEN_DEATH_THROWABLE);
-        HIDDEN_SUSPEND_LOCK = java_lang_Thread.requireHiddenField(Name.HIDDEN_SUSPEND_LOCK);
+        HIDDEN_DEPRECATION_SUPPORT = java_lang_Thread.requireHiddenField(Name.HIDDEN_DEPRECATION_SUPPORT);
 
         if (context.EnableManagement) {
             HIDDEN_THREAD_BLOCKED_OBJECT = java_lang_Thread.requireHiddenField(Name.HIDDEN_THREAD_BLOCKED_OBJECT);
@@ -486,6 +489,12 @@ public final class Meta implements ContextAccess {
         java_lang_ref_Reference = knownKlass(Type.java_lang_ref_Reference);
         java_lang_ref_Reference_referent = java_lang_ref_Reference.requireDeclaredField(Name.referent, Type.java_lang_Object);
         java_lang_ref_Reference_enqueue = java_lang_ref_Reference.requireDeclaredMethod(Name.enqueue, Signature._boolean);
+        java_lang_ref_Reference_getFromInactiveFinalReference = diff() //
+                        .method(VERSION_16_OR_HIGHER, Name.getFromInactiveFinalReference, Signature.Object) //
+                        .notRequiredMethod(java_lang_ref_Reference);
+        java_lang_ref_Reference_clearInactiveFinalReference = diff() //
+                        .method(VERSION_16_OR_HIGHER, Name.clearInactiveFinalReference, Signature._void) //
+                        .notRequiredMethod(java_lang_ref_Reference);
 
         java_lang_ref_Reference_discovered = java_lang_ref_Reference.requireDeclaredField(Name.discovered, Type.java_lang_ref_Reference);
         java_lang_ref_Reference_next = java_lang_ref_Reference.requireDeclaredField(Name.next, Type.java_lang_ref_Reference);
@@ -822,11 +831,8 @@ public final class Meta implements ContextAccess {
 
     /**
      * This method registers known classes that are NOT in {@code java.base} module after VM
-     * 
      * initialization (/ex: {@code java.management}, {@code java.desktop}, etc...), or classes whose
-     * 
      * hierarchy loads classes to early in the boot process..
-     * 
      * <p>
      * Espresso's Polyglot API (polyglot.jar) is injected on the boot CP, must be loaded after
      * modules initialization.
@@ -901,6 +907,7 @@ public final class Meta implements ContextAccess {
     // Checkstyle: stop field name check
 
     public final ObjectKlass java_lang_Object;
+    public final Field HIDDEN_OBJECT_EXTENSION_FIELD;
     public final ArrayKlass java_lang_Object_array;
 
     public final ObjectKlass java_lang_String;
@@ -1174,9 +1181,7 @@ public final class Meta implements ContextAccess {
     public final Method java_lang_Thread_stop;
     public final Field HIDDEN_HOST_THREAD;
     public final Field HIDDEN_INTERRUPTED;
-    public final Field HIDDEN_DEATH;
-    public final Field HIDDEN_DEATH_THROWABLE;
-    public final Field HIDDEN_SUSPEND_LOCK;
+    public final Field HIDDEN_DEPRECATION_SUPPORT;
     public final Field HIDDEN_THREAD_BLOCKED_OBJECT;
     public final Field HIDDEN_THREAD_BLOCKED_COUNT;
     public final Field HIDDEN_THREAD_WAITED_COUNT;
@@ -1285,6 +1290,8 @@ public final class Meta implements ContextAccess {
     public final Field java_lang_ref_Reference_queue;
     public final Field java_lang_ref_Reference_lock;
     public final Method java_lang_ref_Reference_enqueue;
+    public final Method java_lang_ref_Reference_getFromInactiveFinalReference;
+    public final Method java_lang_ref_Reference_clearInactiveFinalReference;
     public final ObjectKlass java_lang_ref_WeakReference;
     public final ObjectKlass java_lang_ref_SoftReference;
     public final ObjectKlass java_lang_ref_PhantomReference;

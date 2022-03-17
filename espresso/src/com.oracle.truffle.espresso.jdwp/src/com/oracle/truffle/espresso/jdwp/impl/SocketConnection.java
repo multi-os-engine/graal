@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2019, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -63,11 +63,13 @@ public final class SocketConnection implements Runnable {
             }
         }
         socketOutput.flush();
+
         synchronized (closeLock) {
             if (closed) {
                 return;
             }
             JDWP.LOGGER.fine("closing socket now");
+
             if (serverSocket != null) {
                 serverSocket.close();
             }

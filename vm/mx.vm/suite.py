@@ -1,6 +1,6 @@
 suite = {
     "name": "vm",
-    "version" : "21.3.0",
+    "version" : "22.0.0.2",
     "mxversion" : "5.309.2",
     "release" : True,
     "groupId" : "org.graalvm",
@@ -39,7 +39,7 @@ suite = {
                 "name": "graal-nodejs",
                 "subdir": True,
                 "dynamic": True,
-                "version": "ede7e2b88260ac8b1ec0d856f0263e56cb4dfed2",
+                "version": "cb7aaacc3a6f06481c82f6be6a974aa8aa4c66c5",
                 "urls" : [
                     {"url" : "https://github.com/graalvm/graaljs.git", "kind" : "git"},
                     {"url": "https://curio.ssw.jku.at/nexus/content/repositories/snapshots", "kind": "binary"},
@@ -49,7 +49,7 @@ suite = {
                 "name": "graal-js",
                 "subdir": True,
                 "dynamic": True,
-                "version": "ede7e2b88260ac8b1ec0d856f0263e56cb4dfed2",
+                "version": "cb7aaacc3a6f06481c82f6be6a974aa8aa4c66c5",
                 "urls": [
                     {"url": "https://github.com/graalvm/graaljs.git", "kind" : "git"},
                     {"url": "https://curio.ssw.jku.at/nexus/content/repositories/snapshots", "kind": "binary"},
@@ -57,7 +57,7 @@ suite = {
             },
             {
                 "name": "truffleruby",
-                "version": "3cb06d24147d0a1c8b00eec8237c926f1791e9b1",
+                "version": "5f52ae98292d84df36545eb379bb7936967b9ead",
                 "dynamic": True,
                 "urls": [
                     {"url": "https://github.com/oracle/truffleruby.git", "kind": "git"},
@@ -66,7 +66,7 @@ suite = {
             },
             {
                 "name": "fastr",
-                "version": "8cacad3aecb277edac12ad7a6f6d2cc5a975a550",
+                "version": "78888bdc183886e2a180ebf81a0d9396dfe3c7b7",
                 "dynamic": True,
                 "urls": [
                     {"url": "https://github.com/oracle/fastr.git", "kind": "git"},
@@ -75,7 +75,7 @@ suite = {
             },
             {
                 "name": "graalpython",
-                "version": "18f3960c365716b032881d0be03fc3303d6be682",
+                "version": "7f02e547a85d798db42f0af065fdc7cb8739dd2a",
                 "dynamic": True,
                 "urls": [
                     {"url": "https://github.com/graalvm/graalpython.git", "kind": "git"},
@@ -131,6 +131,19 @@ suite = {
                 "truffle:TRUFFLE_DSL_PROCESSOR",
             ],
         },
+        "org.graalvm.polybench.instruments" : {
+            "subDir" : "src",
+            "sourceDirs" : ["src"],
+            "javaCompliance" : "1.8+",
+            "license" : "GPLv2-CPE",
+            "checkstyle": "org.graalvm.component.installer",
+            "dependencies": [
+                "truffle:TRUFFLE_API",
+            ],
+            "annotationProcessors": [
+                "truffle:TRUFFLE_DSL_PROCESSOR",
+            ],
+        },
         "nfi-native" : {
             "subDir" : "benchmarks",
             "native" : "shared_lib",
@@ -150,8 +163,8 @@ suite = {
         # Note: small warmup benchmarks can be placed directly under `graal/vm/benchmarks/warmup`
         # and uncomment the corresponding line for the `layout` of `POLYBENCH_BENCHMARKS` in current suite.
         "WARMUP_BENCHMARKS" : {
-            "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/polybench/warmup-benchmarks-0.1.tar.gz"],
-            "sha1" : "4e4a81c096ecc4ba7c4de9ab8ca5180e93c85e60"
+            "urls" : ["https://lafo.ssw.uni-linz.ac.at/pub/graal-external-deps/polybench/warmup-benchmarks-0.3.tar.gz"],
+            "sha1" : "4e23a980be3cb92a183efe7d6d3354438134a55f"
         }
     },
 
@@ -211,6 +224,23 @@ suite = {
                 "sdk:LAUNCHER_COMMON",
             ],
             "maven" : False,
+        },
+        "POLYBENCH_INSTRUMENTS": {
+            "subDir": "src",
+            "dependencies": [
+                "org.graalvm.polybench.instruments",
+            ],
+            "distDependencies": [
+                "truffle:TRUFFLE_API",
+            ],
+            "maven" : False,
+        },
+        "POLYBENCH_INSTRUMENTS_SUPPORT" : {
+            "native" : True,
+            "description" : "Truffle Profiler support distribution for the GraalVM",
+            "layout" : {
+                "native-image.properties" : "file:mx.vm/polybench-instruments.properties",
+            },
         },
         "PMH": {
             "subDir": "src",

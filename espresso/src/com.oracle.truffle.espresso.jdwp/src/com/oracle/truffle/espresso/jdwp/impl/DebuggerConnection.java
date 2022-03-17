@@ -275,7 +275,7 @@ public final class DebuggerConnection implements Commands {
                                     result = JDWP.VirtualMachine.CAPABILITIES_NEW.createReply(packet);
                                     break;
                                 case JDWP.VirtualMachine.REDEFINE_CLASSES.ID:
-                                    result = JDWP.VirtualMachine.REDEFINE_CLASSES.createReply(packet, context);
+                                    result = JDWP.VirtualMachine.REDEFINE_CLASSES.createReply(packet, controller);
                                     break;
                                 case JDWP.VirtualMachine.SET_DEFAULT_STRATUM.ID:
                                     result = JDWP.VirtualMachine.SET_DEFAULT_STRATUM.createReply(packet);
@@ -606,8 +606,16 @@ public final class DebuggerConnection implements Commands {
                 }
                 handleReply(packet, result);
             } catch (Throwable t) {
-                JDWP.LOGGER.warning(() -> "[Internal error]: " + t.getClass());
-                JDWP.LOGGER.throwing(DebuggerConnection.class.getName(), "processPacket", t);
+                if (entered) {
+                    // we can only use the Truffle logger if we were able to enter the context
+                    JDWP.LOGGER.warning(() -> "[Internal error]");
+                    JDWP.LOGGER.throwing(DebuggerConnection.class.getName(), "processPacket", t);
+                } else {
+                    // Checkstyle: stop allow error output
+                    System.out.println("[internal error]: " + t.getMessage());
+                    t.printStackTrace();
+                    // Checkstyle: resume allow error output
+                }
                 PacketStream reply = new PacketStream().replyPacket().id(packet.id);
                 reply.errorCode(ErrorCodes.INTERNAL);
                 handleReply(packet, new CommandResult(reply));

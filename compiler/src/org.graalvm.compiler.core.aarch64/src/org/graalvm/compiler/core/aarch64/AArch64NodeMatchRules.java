@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -27,6 +27,7 @@ package org.graalvm.compiler.core.aarch64;
 
 import org.graalvm.collections.EconomicMap;
 import org.graalvm.collections.Equivalence;
+import org.graalvm.compiler.asm.aarch64.AArch64Assembler;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler.ExtendType;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.core.common.LIRKind;
@@ -73,6 +74,7 @@ import org.graalvm.compiler.nodes.calc.XorNode;
 import org.graalvm.compiler.nodes.calc.ZeroExtendNode;
 import org.graalvm.compiler.nodes.memory.MemoryAccess;
 
+import jdk.vm.ci.aarch64.AArch64;
 import jdk.vm.ci.aarch64.AArch64Kind;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -153,7 +155,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
         return (AArch64Kind) gen.getLIRKind(((ValueNode) access).stamp(NodeView.DEFAULT)).getPlatformKind();
     }
 
-    private static boolean isSupportedExtendedAddSubShift(IntegerConvertNode<?, ?> node, int clampedShiftAmt) {
+    private static boolean isSupportedExtendedAddSubShift(IntegerConvertNode<?> node, int clampedShiftAmt) {
         assert clampedShiftAmt >= 0;
         if (clampedShiftAmt <= 4) {
             switch (node.getInputBits()) {
@@ -315,7 +317,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     public ComplexMatchResult mergeSignExtendByShiftIntoAddSub(BinaryNode op, LeftShiftNode lshift, ValueNode ext, ValueNode x, ValueNode y) {
         assert isNumericInteger(lshift);
         int shiftAmt = getClampedShiftAmt(lshift);
-        if (!isSupportedExtendedAddSubShift((IntegerConvertNode<?, ?>) ext, shiftAmt)) {
+        if (!isSupportedExtendedAddSubShift((IntegerConvertNode<?>) ext, shiftAmt)) {
             return null;
         }
         ExtendType extType;
@@ -683,6 +685,25 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     }
 
     /**
+     * Goal: fold shift into negate operation using AArch64's sub (shifted register) instruction.
+     */
+    @MatchRule("(Negate (UnsignedRightShift=shift a Constant=b))")
+    @MatchRule("(Negate (RightShift=shift a Constant=b))")
+    @MatchRule("(Negate (LeftShift=shift a Constant=b))")
+    public ComplexMatchResult negShift(BinaryNode shift, ValueNode a, ConstantNode b) {
+        assert isNumericInteger(a, b);
+        int shiftAmt = getClampedShiftAmt((ShiftNode<?>) shift);
+        AArch64Assembler.ShiftType shiftType = shiftTypeMap.get(shift.getClass());
+        return builder -> {
+            AllocatableValue src = moveSp(gen.asAllocatable(operand(a)));
+            LIRKind kind = LIRKind.combine(operand(a));
+            Variable result = gen.newVariable(kind);
+            gen.append(new AArch64ArithmeticOp.BinaryShiftOp(AArch64ArithmeticOp.SUB, result, AArch64.zr.asValue(kind), src, shiftType, shiftAmt));
+            return result;
+        };
+    }
+
+    /**
      * Goal: use AArch64's and not (bic) & or not (orn) instructions.
      */
     @MatchRule("(And=logic value1 (Not=not value2))")
@@ -864,7 +885,7 @@ public class AArch64NodeMatchRules extends NodeMatchRules {
     @MatchRule("(Add=op x (ZeroExtend=ext y))")
     @MatchRule("(Sub=op x (ZeroExtend=ext y))")
     public ComplexMatchResult mergeSignExtendIntoAddSub(BinaryNode op, UnaryNode ext, ValueNode x, ValueNode y) {
-        if (!isSupportedExtendedAddSubShift((IntegerConvertNode<?, ?>) ext, 0)) {
+        if (!isSupportedExtendedAddSubShift((IntegerConvertNode<?>) ext, 0)) {
             return null;
         }
 

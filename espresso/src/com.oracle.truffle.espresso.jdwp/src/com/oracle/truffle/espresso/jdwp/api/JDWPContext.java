@@ -513,4 +513,5 @@ public interface JDWPContext {
      * @return all modules
      */
     ModuleRef[] getAllModulesRefs();
+
 }

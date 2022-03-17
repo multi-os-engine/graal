@@ -48,10 +48,8 @@ import org.graalvm.polyglot.impl.AbstractPolyglotImpl.APIAccess;
 import org.graalvm.polyglot.impl.AbstractPolyglotImpl.AbstractHostAccess;
 
 import com.oracle.truffle.api.CallTarget;
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.Truffle;
 import com.oracle.truffle.api.TruffleLanguage;
 import com.oracle.truffle.api.exception.AbstractTruffleException;
 import com.oracle.truffle.api.frame.VirtualFrame;
@@ -67,7 +65,6 @@ import com.oracle.truffle.host.HostMethodScope.ScopedObject;
  */
 final class HostLanguage extends TruffleLanguage<HostContext> {
 
-    @CompilationFinal private GuestToHostCodeCache guestToHostCache;
     @CompilationFinal HostClassCache hostClassCache; // effectively final
     final AbstractHostAccess access;
     final AbstractPolyglotImpl polyglot;
@@ -108,15 +105,6 @@ final class HostLanguage extends TruffleLanguage<HostContext> {
     @Override
     protected boolean isThreadAccessAllowed(Thread thread, boolean singleThreaded) {
         return true;
-    }
-
-    GuestToHostCodeCache getGuestToHostCache() {
-        GuestToHostCodeCache cache = this.guestToHostCache;
-        if (cache == null) {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
-            guestToHostCache = cache = new GuestToHostCodeCache(this);
-        }
-        return cache;
     }
 
     private Object unwrapIfScoped(Object obj) {
@@ -176,13 +164,13 @@ final class HostLanguage extends TruffleLanguage<HostContext> {
     @Override
     protected CallTarget parse(ParsingRequest request) throws Exception {
         String sourceString = request.getSource().getCharacters().toString();
-        return Truffle.getRuntime().createCallTarget(new RootNode(this) {
+        return new RootNode(this) {
 
             @Override
             public Object execute(VirtualFrame frame) {
                 return service.findDynamicClass(HostContext.get(this), sourceString);
             }
-        });
+        }.getCallTarget();
     }
 
     static final LanguageReference<HostLanguage> REFERENCE = LanguageReference.create(HostLanguage.class);

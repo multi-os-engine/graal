@@ -70,6 +70,7 @@ import com.oracle.svm.hosted.meta.HostedMethod;
 import com.oracle.svm.hosted.meta.HostedPrimitiveType;
 import com.oracle.svm.hosted.meta.HostedType;
 import com.oracle.svm.hosted.substitute.InjectedFieldsType;
+import com.oracle.svm.hosted.substitute.SubstitutionField;
 import com.oracle.svm.hosted.substitute.SubstitutionMethod;
 import com.oracle.svm.hosted.substitute.SubstitutionType;
 
@@ -227,6 +228,16 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
             return ((InjectedFieldsType) javaType).getOriginal();
         }
         return javaType;
+    }
+
+    private static int getOriginalModifiers(HostedMethod hostedMethod) {
+        ResolvedJavaMethod targetMethod = hostedMethod.getWrapped().getWrapped();
+        if (targetMethod instanceof SubstitutionMethod) {
+            targetMethod = ((SubstitutionMethod) targetMethod).getOriginal();
+        } else if (targetMethod instanceof CustomSubstitutionMethod) {
+            targetMethod = ((CustomSubstitutionMethod) targetMethod).getOriginal();
+        }
+        return targetMethod.getModifiers();
     }
 
     private static String toJavaName(JavaType javaType) {
@@ -608,7 +619,11 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
             @Override
             public int modifiers() {
-                return field.getModifiers();
+                ResolvedJavaField targetField = field.wrapped.wrapped;
+                if (targetField instanceof SubstitutionField) {
+                    targetField = ((SubstitutionField) targetField).getOriginal();
+                }
+                return targetField.getModifiers();
             }
 
             private boolean isStatic() {
@@ -645,7 +660,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
             @Override
             public String valueType() {
-                return hostedMethod.getSignature().getReturnType(null).toJavaName();
+                return toJavaName((HostedType) hostedMethod.getSignature().getReturnType(null));
             }
 
             @Override
@@ -654,7 +669,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
                 int parameterCount = signature.getParameterCount(false);
                 List<String> paramTypes = new ArrayList<>(parameterCount);
                 for (int i = 0; i < parameterCount; i++) {
-                    paramTypes.add(signature.getParameterType(i, null).toJavaName());
+                    paramTypes.add(toJavaName((HostedType) signature.getParameterType(i, null)));
                 }
                 return paramTypes;
             }
@@ -683,7 +698,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
             @Override
             public int modifiers() {
-                return hostedMethod.getModifiers();
+                return getOriginalModifiers(hostedMethod);
             }
         }
     }
@@ -963,7 +978,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
 
         @Override
         public int modifiers() {
-            return hostedMethod.getModifiers();
+            return getOriginalModifiers(hostedMethod);
         }
     }
 
@@ -1263,7 +1278,7 @@ class NativeImageDebugInfoProvider implements DebugInfoProvider {
     }
 
     private boolean acceptObjectInfo(ObjectInfo objectInfo) {
-        /* This condiiton rejects filler partition objects. */
+        /* This condition rejects filler partition objects. */
         return (objectInfo.getPartition().getStartOffset() > 0);
     }
 

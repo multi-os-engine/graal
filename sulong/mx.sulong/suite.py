@@ -1,5 +1,5 @@
 suite = {
-  "mxversion" : "5.305.3",
+  "mxversion" : "5.317.0",
   "name" : "sulong",
   "versionConflictResolution" : "latest",
 
@@ -653,7 +653,7 @@ suite = {
         "SULONG_BOOTSTRAP_TOOLCHAIN_NO_HOME",
       ],
       "cmakeConfig" : {
-        "CMAKE_OSX_DEPLOYMENT_TARGET" : "10.12",
+        "CMAKE_OSX_DEPLOYMENT_TARGET" : "10.13",
         "CMAKE_C_COMPILER" : "<path:SULONG_BOOTSTRAP_TOOLCHAIN_NO_HOME>/bin/<cmd:clang>",
         "CMAKE_CXX_COMPILER" : "<path:SULONG_BOOTSTRAP_TOOLCHAIN_NO_HOME>/bin/<cmd:clang++>",
         "GRAALVM_LLVM_INCLUDE_DIR" : "<path:com.oracle.truffle.llvm.libraries.graalvm.llvm>/include",
@@ -704,7 +704,7 @@ suite = {
         "com.oracle.truffle.llvm.libraries.graalvm.llvm",
       ],
       "cmakeConfig" : {
-        "CMAKE_OSX_DEPLOYMENT_TARGET" : "10.12",
+        "CMAKE_OSX_DEPLOYMENT_TARGET" : "10.13",
         "CMAKE_C_COMPILER" : "<path:SULONG_BOOTSTRAP_TOOLCHAIN_NO_HOME>/bin/<cmd:clang>",
         "GRAALVM_LLVM_INCLUDE_DIR" : "<path:com.oracle.truffle.llvm.libraries.graalvm.llvm>/include",
         "LLVM_LINK" : "<path:LLVM_TOOLCHAIN>/bin/<exe:llvm-link>",
@@ -729,7 +729,7 @@ suite = {
         "sdk:LLVM_TOOLCHAIN",
       ],
       "cmakeConfig" : {
-        "CMAKE_OSX_DEPLOYMENT_TARGET" : "10.12",
+        "CMAKE_OSX_DEPLOYMENT_TARGET" : "10.13",
         "CMAKE_C_COMPILER" : "<path:LLVM_TOOLCHAIN>/bin/<exe:clang>",
         "TRUFFLE_NFI_NATIVE_INCLUDE" : "<path:truffle:TRUFFLE_NFI_NATIVE>/include",
         "CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS" : "YES",
@@ -846,7 +846,6 @@ suite = {
       ],
       "buildDependencies" : [
         "SULONG_HOME",
-        "LINUX_AMD64_SUPPORT",
       ],
       "testProject" : True,
       "defaultBuild" : False,
@@ -946,7 +945,6 @@ suite = {
       "fileExts" : [".ll"],
       "buildRef" : False,
       "buildDependencies" : [
-        "LINUX_AMD64_SUPPORT",
       ],
       "testProject" : True,
       "defaultBuild" : False,
@@ -993,6 +991,26 @@ suite = {
       "variants" : ["bitcode-O0"],
       "cmakeConfig" : {
         "CMAKE_C_FLAGS" : "-pthread",
+        "CMAKE_C_LINK_FLAGS" : "-pthread",
+      },
+      "dependencies" : [
+        "SULONG_TEST",
+      ],
+      "testProject" : True,
+      "defaultBuild" : False,
+    },
+    "com.oracle.truffle.llvm.tests.embedded.pthread.native" : {
+      "subDir" : "tests",
+      "class" : "SulongCMakeTestSuite",
+      "variants" : ["toolchain-plain"],
+      "buildRef" : False,
+      "buildSharedObject" : True,
+      "bundledLLVMOnly" : True,
+      "cmakeConfig" : {
+        "CMAKE_C_FLAGS" : "-pthread",
+        "CMAKE_C_LINK_FLAGS" : "-pthread",
+        "TOOLCHAIN_CLANG" : "<toolchainGetToolPath:native,CC>",
+        "TOOLCHAIN_CLANGXX" : "<toolchainGetToolPath:native,CXX>",
       },
       "dependencies" : [
         "SULONG_TEST",
@@ -1534,6 +1552,7 @@ suite = {
       "layout": {
         "./": "dependency:bootstrap-toolchain-launchers/*",
       },
+      "asm_requires_cpp": False,
       "buildDependencies" : [
         "SULONG_TOOLCHAIN_LAUNCHERS",
       ],
@@ -1683,6 +1702,7 @@ suite = {
           "dependency:com.oracle.truffle.llvm.tests.debugexpr.native/*",
           "dependency:com.oracle.truffle.llvm.tests.irdebug.native/*",
           "dependency:com.oracle.truffle.llvm.tests.embedded.custom.native/*",
+          "dependency:com.oracle.truffle.llvm.tests.embedded.pthread.native/*",
           "dependency:com.oracle.truffle.llvm.tests.bitcode.other.native/*",
           # the reload tests are not only ran as standalone test (SulongSuite) but also as embedded test (LoaderTest)
           "dependency:com.oracle.truffle.llvm.tests.linker.native/reload",

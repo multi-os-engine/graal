@@ -61,16 +61,6 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
             this.registry = data;
         }
 
-        public static ModuleEntry createUnnamedModuleEntry(StaticObject module, ClassRegistry registry) {
-            ModuleEntry result = new ModuleEntry(null, registry);
-            result.setCanReadAllUnnamed();
-            if (!StaticObject.isNull(module)) {
-                result.setModule(module);
-            }
-            result.isOpen = true;
-            return result;
-        }
-
         public String jdwpName() {
             if (name == null) {
                 // JDWP expects the unnamed module to return empty string
@@ -82,6 +72,16 @@ public class ModuleTable extends EntryTable<ModuleTable.ModuleEntry, ClassRegist
 
         public Object classLoader() {
             return registry.getClassLoader();
+        }
+
+        public static ModuleEntry createUnnamedModuleEntry(StaticObject module, ClassRegistry registry) {
+            ModuleEntry result = new ModuleEntry(null, registry);
+            result.setCanReadAllUnnamed();
+            if (!StaticObject.isNull(module)) {
+                result.setModule(module);
+            }
+            result.isOpen = true;
+            return result;
         }
 
         private final ClassRegistry registry;

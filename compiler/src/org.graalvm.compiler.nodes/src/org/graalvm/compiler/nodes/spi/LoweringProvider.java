@@ -30,6 +30,7 @@ import org.graalvm.compiler.nodes.calc.RoundNode;
 import org.graalvm.compiler.nodes.memory.address.AddressNode;
 import org.graalvm.compiler.options.OptionValues;
 
+import jdk.vm.ci.code.TargetDescription;
 import jdk.vm.ci.meta.JavaKind;
 
 /**
@@ -70,4 +71,13 @@ public interface LoweringProvider {
      */
     boolean supportsRounding();
 
+    /**
+     * Indicates whether this target platform supports the usage of implicit (trapping) null checks.
+     */
+    boolean supportsImplicitNullChecks();
+
+    /**
+     * Returns the target being lowered.
+     */
+    TargetDescription getTarget();
 }

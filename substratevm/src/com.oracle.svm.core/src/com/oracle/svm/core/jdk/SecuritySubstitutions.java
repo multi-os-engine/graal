@@ -69,6 +69,8 @@ import com.oracle.svm.util.ReflectionUtil;
 // Checkstyle: stop
 import sun.security.jca.ProviderList;
 import sun.security.util.SecurityConstants;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 // Checkstyle: resume
 
 // Checkstyle: allow reflection
@@ -86,7 +88,7 @@ final class Target_java_security_AccessController {
         try {
             return action.run();
         } catch (Throwable ex) {
-            throw AccessControllerUtil.wrapCheckedException(ex);
+            throw AccessControllerUtil.wrapCheckedExceptionForPrivilegedAction(ex);
         }
     }
 
@@ -95,7 +97,7 @@ final class Target_java_security_AccessController {
         try {
             return action.run();
         } catch (Throwable ex) {
-            throw AccessControllerUtil.wrapCheckedException(ex);
+            throw AccessControllerUtil.wrapCheckedExceptionForPrivilegedAction(ex);
         }
     }
 
@@ -104,7 +106,7 @@ final class Target_java_security_AccessController {
         try {
             return action.run();
         } catch (Throwable ex) {
-            throw AccessControllerUtil.wrapCheckedException(ex);
+            throw AccessControllerUtil.wrapCheckedExceptionForPrivilegedAction(ex);
         }
     }
 
@@ -113,7 +115,7 @@ final class Target_java_security_AccessController {
         try {
             return action.run();
         } catch (Throwable ex) {
-            throw AccessControllerUtil.wrapCheckedException(ex);
+            throw AccessControllerUtil.wrapCheckedExceptionForPrivilegedAction(ex);
         }
     }
 
@@ -188,6 +190,13 @@ class AccessControllerUtil {
             return ex;
         }
     }
+
+    static Throwable wrapCheckedExceptionForPrivilegedAction(Throwable ex) {
+        if (JavaVersionUtil.JAVA_SPEC <= 11) {
+            return wrapCheckedException(ex);
+        }
+        return ex;
+    }
 }
 
 @AutomaticFeature
@@ -203,12 +212,6 @@ class AccessControlContextFeature implements Feature {
         }
         return obj;
     }
-}
-
-@TargetClass(java.security.AccessControlContext.class)
-final class Target_java_security_AccessControlContext {
-
-    @Alias protected boolean isPrivileged;
 }
 
 @TargetClass(SecurityManager.class)
@@ -237,9 +240,38 @@ final class Target_javax_crypto_CryptoAllPermission {
     static Target_javax_crypto_CryptoAllPermission INSTANCE;
 }
 
-@Platforms(Platform.WINDOWS.class)
+@TargetClass(value = java.security.Provider.class, innerClass = "ServiceKey")
+final class Target_java_security_Provider_ServiceKey {
+
+}
+
 @TargetClass(value = java.security.Provider.class)
 final class Target_java_security_Provider {
+    @Alias @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = ServiceKeyComputer.class) //
+    private static Target_java_security_Provider_ServiceKey previousKey;
+}
+
+@Platforms(Platform.HOSTED_ONLY.class)
+class ServiceKeyComputer implements RecomputeFieldValue.CustomFieldValueComputer {
+
+    @Override
+    public Object compute(MetaAccessProvider metaAccess, ResolvedJavaField original, ResolvedJavaField annotated, Object receiver) {
+        try {
+            // Checkstyle: stop do not use dynamic class loading
+            Class<?> serviceKey = Class.forName("java.security.Provider$ServiceKey");
+            // Checkstyle: resume
+            Constructor<?> constructor = ReflectionUtil.lookupConstructor(serviceKey, String.class, String.class, boolean.class);
+            return constructor.newInstance("", "", false);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | ClassNotFoundException e) {
+            throw VMError.shouldNotReachHere(e);
+        }
+    }
+}
+
+@Platforms(Platform.WINDOWS.class)
+@TargetClass(value = java.security.Provider.class)
+final class Target_java_security_Provider_Windows {
+
     @Alias //
     private transient boolean initialized;
 
@@ -264,7 +296,7 @@ final class Target_java_security_Provider {
 final class ProviderUtil {
     private static volatile boolean initialized = false;
 
-    static void initialize(Target_java_security_Provider provider) {
+    static void initialize(Target_java_security_Provider_Windows provider) {
         if (initialized) {
             return;
         }
@@ -308,7 +340,7 @@ final class Target_javax_crypto_JceSecurity {
      *
      * This is only used in {@link KeyAgreement}, it's safe to remove.
      */
-    @Alias @TargetElement(onlyWith = JDK15OrEarlier.class) //
+    @Alias @TargetElement(onlyWith = JDK11OrEarlier.class) //
     @InjectAccessors(JceSecurityAccessor.class) //
     static SecureRandom RANDOM;
 
@@ -330,6 +362,10 @@ final class Target_javax_crypto_JceSecurity {
     @Alias //
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Custom, declClass = VerificationCacheTransformer.class, disableCaching = true) //
     private static Map<Object, Object> verificationResults;
+
+    @Alias //
+    @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset) //
+    private static Map<Provider, Object> verifyingProviders;
 
     @Substitute
     @TargetElement(onlyWith = JDK8OrEarlier.class)
@@ -376,7 +412,7 @@ final class Target_javax_crypto_JceSecurity {
     }
 }
 
-@TargetClass(className = "javax.crypto.JceSecurity", innerClass = "IdentityWrapper", onlyWith = JDK16OrLater.class)
+@TargetClass(className = "javax.crypto.JceSecurity", innerClass = "IdentityWrapper", onlyWith = JDK17OrLater.class)
 @SuppressWarnings({"unused"})
 final class Target_javax_crypto_JceSecurity_IdentityWrapper {
     @Alias //
@@ -419,10 +455,10 @@ class JceSecurityAccessor {
 final class JceSecurityUtil {
 
     static Object providerKey(Provider p) {
-        if (JavaVersionUtil.JAVA_SPEC < 16) {
+        if (JavaVersionUtil.JAVA_SPEC <= 11) {
             return p;
         }
-        /* Starting with JDK 16 the verification results map key is an identity wrapper object. */
+        /* Starting with JDK 17 the verification results map key is an identity wrapper object. */
         return new Target_javax_crypto_JceSecurity_IdentityWrapper(p);
     }
 
@@ -532,30 +568,33 @@ final class AllPermissionsPolicy extends Policy {
     }
 
     @Override
+    @SuppressWarnings("deprecation") // deprecated starting JDK 17
     public PermissionCollection getPermissions(CodeSource codesource) {
         return allPermissions();
     }
 
     @Override
+    @SuppressWarnings("deprecation") // deprecated starting JDK 17
     public PermissionCollection getPermissions(ProtectionDomain domain) {
         return allPermissions();
     }
 
     @Override
+    @SuppressWarnings("deprecation") // deprecated starting JDK 17
     public boolean implies(ProtectionDomain domain, Permission permission) {
         return true;
     }
 }
 
 /**
- * This class is instantiated indirectly from the {@link Policy#getInstance} methods via the
+ * This class is instantiated indirectly from the {@code Policy#getInstance} methods via the
  * {@link java.security.Security#getProviders security provider} abstractions. We could just
- * substitute the {@link Policy#getInstance} methods to return
- * {@link AllPermissionsPolicy#SINGLETON}, this version is more fool-proof in case someone manually
- * registers security providers for reflective instantiation.
+ * substitute the Policy.getInstance methods to return {@link AllPermissionsPolicy#SINGLETON}, this
+ * version is more fool-proof in case someone manually registers security providers for reflective
+ * instantiation.
  */
 @TargetClass(className = "sun.security.provider.PolicySpiFile")
-@SuppressWarnings({"unused", "static-method"})
+@SuppressWarnings({"unused", "static-method", "deprecation"})
 final class Target_sun_security_provider_PolicySpiFile {
 
     @Substitute
@@ -563,16 +602,19 @@ final class Target_sun_security_provider_PolicySpiFile {
     }
 
     @Substitute
+    @SuppressWarnings("deprecation") // deprecated starting JDK 17
     private PermissionCollection engineGetPermissions(CodeSource codesource) {
         return AllPermissionsPolicy.SINGLETON.getPermissions(codesource);
     }
 
     @Substitute
+    @SuppressWarnings("deprecation") // deprecated starting JDK 17
     private PermissionCollection engineGetPermissions(ProtectionDomain d) {
         return AllPermissionsPolicy.SINGLETON.getPermissions(d);
     }
 
     @Substitute
+    @SuppressWarnings("deprecation") // deprecated starting JDK 17
     private boolean engineImplies(ProtectionDomain d, Permission p) {
         return AllPermissionsPolicy.SINGLETON.implies(d, p);
     }

@@ -32,6 +32,8 @@ import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,6 +59,7 @@ import org.graalvm.compiler.api.test.Graal;
 import org.graalvm.compiler.api.test.ModuleSupport;
 import org.graalvm.compiler.bytecode.BridgeMethodUtils;
 import org.graalvm.compiler.core.CompilerThreadFactory;
+import org.graalvm.compiler.core.common.GraalOptions;
 import org.graalvm.compiler.core.common.LIRKind;
 import org.graalvm.compiler.core.common.type.ArithmeticOpTable;
 import org.graalvm.compiler.debug.DebugCloseable;
@@ -156,6 +159,10 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                 classpath = System.getProperty("sun.boot.class.path");
             } else {
                 classpath = JRT_CLASS_PATH_ENTRY;
+                String upgradeModulePath = System.getProperty("jdk.module.upgrade.path");
+                if (upgradeModulePath != null) {
+                    classpath += File.pathSeparator + upgradeModulePath;
+                }
             }
 
             // Also process classes that go into the libgraal native image.
@@ -280,39 +287,43 @@ public class CheckGraalInvariants extends GraalCompilerTest {
                     if (path.equals(JRT_CLASS_PATH_ENTRY)) {
                         for (String className : ModuleSupport.getJRTGraalClassNames()) {
                             if (isGSON(className)) {
-                                /*
-                                 * GSON classes are compiled with old JDK
-                                 */
                                 continue;
                             }
                             classNames.add(className);
                         }
                     } else {
-                        final ZipFile zipFile = new ZipFile(new File(path));
-                        for (final Enumeration<? extends ZipEntry> entry = zipFile.entries(); entry.hasMoreElements();) {
-                            final ZipEntry zipEntry = entry.nextElement();
-                            String name = zipEntry.getName();
-                            if (name.endsWith(".class") && !name.startsWith("META-INF/versions/")) {
-                                String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
-                                if (isInNativeImage(className)) {
-                                    /*
-                                     * Native Image is an external tool and does not need to follow
-                                     * the Graal invariants.
-                                     */
-                                    continue;
+                        File file = new File(path);
+                        if (!file.exists()) {
+                            continue;
+                        }
+                        if (file.isDirectory()) {
+                            Path root = file.toPath();
+                            Files.walk(root).forEach(p -> {
+                                String name = root.relativize(p).toString();
+                                if (name.endsWith(".class") && !name.startsWith("META-INF/versions/")) {
+                                    String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+                                    if (!(isInNativeImage(className) || isGSON(className))) {
+                                        classNames.add(className);
+                                    }
                                 }
-                                if (isGSON(className)) {
-                                    /*
-                                     * GSON classes are compiled with old JDK
-                                     */
-                                    continue;
+                            });
+                        } else {
+                            final ZipFile zipFile = new ZipFile(file);
+                            for (final Enumeration<? extends ZipEntry> entry = zipFile.entries(); entry.hasMoreElements();) {
+                                final ZipEntry zipEntry = entry.nextElement();
+                                String name = zipEntry.getName();
+                                if (name.endsWith(".class") && !name.startsWith("META-INF/versions/")) {
+                                    String className = name.substring(0, name.length() - ".class".length()).replace('/', '.');
+                                    if (isInNativeImage(className) || isGSON(className)) {
+                                        continue;
+                                    }
+                                    classNames.add(className);
                                 }
-                                classNames.add(className);
                             }
                         }
                     }
                 } catch (IOException ex) {
-                    Assert.fail(ex.toString());
+                    throw new AssertionError(ex);
                 }
             }
         }
@@ -356,6 +367,7 @@ public class CheckGraalInvariants extends GraalCompilerTest {
         verifiers.add(new VerifyUnsafeAccess());
         verifiers.add(new VerifyVariableCasts());
         verifiers.add(new VerifyIterableNodeType());
+        verifiers.add(new VerifyArchUsageInPlugins());
 
         loadVerifiers(verifiers);
 
@@ -533,15 +545,25 @@ public class CheckGraalInvariants extends GraalCompilerTest {
     private static void checkOptionFieldUsages(List<String> errors, Map<ResolvedJavaField, Set<ResolvedJavaMethod>> optionFieldUsages) {
         for (Map.Entry<ResolvedJavaField, Set<ResolvedJavaMethod>> e : optionFieldUsages.entrySet()) {
             if (e.getValue().isEmpty()) {
-                errors.add("No uses found for " + e.getKey().format("%H.%n"));
+                if (e.getKey().format("%H.%n").equals(GraalOptions.VerifyPhases.getDescriptor().getLocation())) {
+                    // Special case: This option may only have downstream uses
+                } else {
+                    errors.add("No uses found for " + e.getKey().format("%H.%n"));
+                }
             }
         }
     }
 
+    /**
+     * Native Image is an external tool and does not need to follow the Graal invariants.
+     */
     private static boolean isInNativeImage(String className) {
         return className.startsWith("org.graalvm.nativeimage");
     }
 
+    /**
+     * GSON classes are compiled with old JDK.
+     */
     private static boolean isGSON(String className) {
         return className.contains("com.google.gson");
     }
